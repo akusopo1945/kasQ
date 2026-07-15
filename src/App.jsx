@@ -10,8 +10,9 @@ import XLSX from 'xlsx-js-style';
 
 import HeaderStatus from './components/HeaderStatus';
 import VoiceButton from './components/VoiceButton';
+import { Camera, CameraResultType } from '@capacitor/camera';
 import { db, seedUserProducts, seedTestUser } from './services/db.service';
-import { parseCommand } from './services/ai.service';
+import { parseCommand, parseImageCommand } from './services/ai.service';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 export default function App() {
@@ -195,6 +196,66 @@ export default function App() {
   const handleApiKeyChange = (key) => {
     setApiKey(key);
     localStorage.setItem('kasq_gemini_api_key', key);
+  };
+
+  // --- AI PHOTO CHECKOUT / CAMERA PROCESSING ---
+  const handleTakePhoto = async () => {
+    setIsProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    setParsedPreview(null);
+
+    try {
+      let base64Data = '';
+
+      if (Capacitor.isNativePlatform()) {
+        const image = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.Base64
+        });
+        base64Data = image.base64String;
+      } else {
+        // Web fallback: open file dialog
+        base64Data = await new Promise((resolve, reject) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+              reject(new Error('Tidak ada file dipilih'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = reader.result.split(',')[1];
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          };
+          input.click();
+        });
+      }
+
+      if (!base64Data) {
+        throw new Error('Gagal mengambil gambar');
+      }
+
+      const parsed = await parseImageCommand(base64Data, apiKey, products);
+      if (parsed.action === 'SALE' && parsed.items && parsed.items.length > 0) {
+        setParsedPreview(parsed);
+        setSuccessMsg(`Foto berhasil dianalisis! Ditemukan ${parsed.items.length} item.`);
+      } else {
+        throw new Error('Tidak ada item yang dapat diidentifikasi dari foto. Pastikan pencahayaan cukup.');
+      }
+    } catch (err) {
+      console.error('Camera/Gemini Error:', err);
+      setErrorMsg(err.message || 'Gagal memproses foto pesanan');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // --- AI VOICE HUB / TEXT COMMAND PROCESSING ---
@@ -1279,22 +1340,52 @@ export default function App() {
         {/* RIGHT COLUMN: Voice Hub & Checkout Cart */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
-          {/* HYBRID AI VOICE HUB */}
+          {/* HYBRID AI SMART ASSISTANT */}
           <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-5 shadow-lg backdrop-blur-sm relative overflow-hidden flex flex-col items-center text-center">
             <div className="absolute top-0 left-0 w-full h-[4px] bg-gradient-to-r from-violet-600 to-indigo-600" />
-            <h2 className="text-base sm:text-lg font-bold text-white mb-1">KasQ AI Voice Hub</h2>
-            <p className="text-[11px] text-neutral-500 mb-4 max-w-xs">
-              Ucapkan perintah seperti "jual Kopi Susu dua" atau "pengeluaran 50000 beli sapu"
+            <h2 className="text-base sm:text-lg font-bold text-white mb-1">KasQ AI Smart Assistant</h2>
+            <p className="text-[10px] text-neutral-500 mb-2 max-w-xs">
+              Gunakan suara untuk transaksi, atau ambil foto kertas pesanan / menu makanan
             </p>
 
-            {/* Pulse Voice Button */}
-            <VoiceButton 
-              onResult={(text) => {
-                setInputText(text);
-                processCommandText(text);
-              }}
-              onError={(err) => setErrorMsg(err)}
-            />
+            <div className="flex items-center justify-center gap-8 w-full">
+              {/* Voice Button */}
+              <VoiceButton 
+                onResult={(text) => {
+                  setInputText(text);
+                  processCommandText(text);
+                }}
+                onError={(err) => setErrorMsg(err)}
+              />
+
+              {/* Camera Button */}
+              <div className="flex flex-col items-center justify-center gap-3 py-6 select-none">
+                <button
+                  onClick={handleTakePhoto}
+                  disabled={isProcessing}
+                  className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl cursor-pointer ${
+                    isProcessing
+                      ? 'bg-neutral-850 scale-95 opacity-50'
+                      : 'bg-gradient-to-tr from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-violet-950/40'
+                  }`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                    stroke="currentColor"
+                    className="w-8 h-8 text-white z-10"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                  </svg>
+                </button>
+                <span className="text-xs font-semibold tracking-wide text-neutral-400">
+                  Ambil Foto Order
+                </span>
+              </div>
+            </div>
 
             {/* Text Input Fallback */}
             <div className="w-full mt-2 flex items-center bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 shadow-inner">

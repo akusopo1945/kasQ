@@ -164,3 +164,75 @@ Kembalikan format JSON yang valid dan bersesuaian dengan skema.
   // Fallback to local offline parser
   return parseLocalCommand(text, localProducts, localMaterials);
 }
+
+// AI Image Parser (using gemini-2.5-flash multimodal)
+export async function parseImageCommand(base64Image, apiKey, localProducts = []) {
+  if (!apiKey) {
+    throw new Error('API Key Gemini diperlukan untuk pemrosesan foto');
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const prompt = `
+Kamu adalah asisten kasir pintar untuk aplikasi POS bernama KasQ.
+Tugasmu adalah menganalisis foto yang diberikan (bisa berupa foto struk belanja, coretan kertas berisi pesanan pelanggan, atau bahkan foto hidangan makanan/minuman langsung di atas meja).
+Ekstrak daftar item pesanan yang teridentifikasi dari foto tersebut dan cocokkan dengan daftar produk lokal di toko kami.
+
+Daftar produk lokal di toko:
+${JSON.stringify(localProducts)}
+
+Instruksi Pencocokan:
+1. Identifikasi nama makanan/minuman/barang dan kuantitasnya (qty) dari gambar.
+2. Coba cocokkan nama barang yang teridentifikasi dengan daftar produk lokal di atas. Jika mirip, gunakan nama resmi produk lokal tersebut beserta harganya (price).
+3. Jika tidak ada produk lokal yang cocok, buat item baru dengan nama barang yang teridentifikasi dan harga (price) 0.
+4. Set action ke "SALE".
+
+Kembalikan format JSON yang valid dan bersesuaian dengan skema.
+`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: base64Image
+          }
+        },
+        prompt
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['SALE'] },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  qty: { type: 'number' },
+                  price: { type: 'number' }
+                },
+                required: ['name', 'qty']
+              }
+            }
+          },
+          required: ['action', 'items']
+        }
+      }
+    });
+
+    const resultText = response.text;
+    if (resultText) {
+      return JSON.parse(resultText);
+    }
+    throw new Error('Gagal mengekstrak teks dari foto');
+  } catch (error) {
+    console.error('Gemini Image API Error:', error);
+    throw new Error(error.message || 'Gagal memproses foto pesanan');
+  }
+}
+
