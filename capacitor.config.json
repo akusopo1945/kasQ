@@ -1,0 +1,10 @@
+{
+  "appId": "com.kasq.app",
+  "appName": "KasQ",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": []
+  }
+}
