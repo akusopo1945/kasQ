@@ -70,9 +70,15 @@ export default function VoiceButton({ onResult, onError }) {
           return;
         }
 
-        const { speechRecognition } = await SpeechRecognition.hasPermission();
-        if (!speechRecognition) {
-          await SpeechRecognition.requestPermission();
+        // Check permissions using modern v7 API
+        let perm = await SpeechRecognition.checkPermissions();
+        if (perm.speechRecognition !== 'granted' || perm.microphone !== 'granted') {
+          perm = await SpeechRecognition.requestPermissions();
+        }
+
+        if (perm.speechRecognition !== 'granted' || perm.microphone !== 'granted') {
+          onError('Izin mikrofon/speech recognition ditolak');
+          return;
         }
 
         if (isListening) {
