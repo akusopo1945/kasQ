@@ -59,6 +59,13 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [parsedPreview, setParsedPreview] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('kasq_theme') || 'dark');
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('kasq_theme', nextTheme);
+  };
 
   // Cart for POS Sales
   const [cart, setCart] = useState([]);
@@ -784,7 +791,7 @@ export default function App() {
   // --- AUTH SCREEN RENDERING ---
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 antialiased select-none font-sans">
+      <div className={`min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 antialiased select-none font-sans ${theme === 'light' ? 'theme-light' : ''}`}>
         <div className="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[4px] bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_0_12px_#6366f1]" />
           
@@ -892,9 +899,9 @@ export default function App() {
 
   // --- DASHBOARD UI RENDERING ---
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none antialiased pb-12">
+    <div className={`min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none antialiased pb-12 ${theme === 'light' ? 'theme-light' : ''}`}>
       {/* Real-time Status and Settings Header */}
-      <HeaderStatus apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
+      <HeaderStatus apiKey={apiKey} onApiKeyChange={handleApiKeyChange} theme={theme} onToggleTheme={toggleTheme} />
 
       {/* Tabs Navigation Bar */}
       <div className="w-full bg-neutral-900 border-b border-neutral-800 px-6 py-2.5 flex items-center justify-between gap-4 overflow-x-auto">

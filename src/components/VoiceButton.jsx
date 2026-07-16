@@ -89,23 +89,31 @@ export default function VoiceButton({ onResult, onError }) {
           setIsListening(true);
           setStatus('Mendengarkan...');
 
-          // Start speech recognition
-          await SpeechRecognition.start({
-            language: 'id-ID',
-            maxResults: 1,
-            prompt: 'Katakan perintah transaksi...',
-            partialResults: false,
-            popup: true
-          });
-
-          // Register results listener
-          SpeechRecognition.addListener('partialResults', (data) => {
+          // 1. Register listener FIRST before starting
+          const listener = await SpeechRecognition.addListener('partialResults', (data) => {
             if (data.matches && data.matches.length > 0) {
               onResult(data.matches[0]);
+              // Auto stop listening once we get result
+              SpeechRecognition.stop().catch(() => {});
               setIsListening(false);
               setStatus('Tekan untuk bicara');
+              listener.remove();
             }
           });
+
+          try {
+            // 2. Start speech recognition with partialResults: true
+            await SpeechRecognition.start({
+              language: 'id-ID',
+              maxResults: 1,
+              prompt: 'Katakan perintah transaksi...',
+              partialResults: true,
+              popup: true
+            });
+          } catch (startErr) {
+            listener.remove();
+            throw startErr;
+          }
         }
       } catch (err) {
         console.error('Capacitor Speech Error:', err);

@@ -39,3 +39,72 @@ html, body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Light theme overrides for zero-JSX theme support */
+.theme-light {
+  background-color: #f9fafb !important;
+  color: #111827 !important;
+}
+
+.theme-light .bg-neutral-950 {
+  background-color: #f3f4f6 !important;
+}
+
+.theme-light .bg-neutral-900 {
+  background-color: #ffffff !important;
+}
+
+.theme-light .bg-neutral-900\/60 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.theme-light .bg-neutral-900\/50 {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.theme-light .border-neutral-800 {
+  border-color: #e5e7eb !important;
+}
+
+.theme-light .border-neutral-800\/80 {
+  border-color: rgba(229, 231, 235, 0.8) !important;
+}
+
+.theme-light .text-white {
+  color: #111827 !important;
+}
+
+.theme-light .text-neutral-100 {
+  color: #1f2937 !important;
+}
+
+.theme-light .text-neutral-200 {
+  color: #374151 !important;
+}
+
+.theme-light .text-neutral-300 {
+  color: #4b5563 !important;
+}
+
+.theme-light .text-neutral-400 {
+  color: #4b5563 !important;
+}
+
+.theme-light .text-neutral-500 {
+  color: #6b7280 !important;
+}
+
+.theme-light .text-neutral-600 {
+  color: #9ca3af !important;
+}
+
+/* Override chart grid and text colors for Light Mode */
+.theme-light .recharts-cartesian-grid-horizontal line,
+.theme-light .recharts-cartesian-grid-vertical line {
+  stroke: #e5e7eb !important;
+}
+
+.theme-light .recharts-text {
+  fill: #4b5563 !important;
+}
+

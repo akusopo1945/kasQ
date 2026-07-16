@@ -91,6 +91,14 @@ function capitalizeWords(str) {
 
 // Main AI Service Parser (Hybrid Online-Offline)
 export async function parseCommand(text, apiKey, localProducts = [], localMaterials = []) {
+  // 1. Try local offline parser first for ultimate speed and responsiveness
+  const localResult = parseLocalCommand(text, localProducts, localMaterials);
+  if (localResult && localResult.action !== 'UNKNOWN') {
+    console.log('Parsed instantly using local regex rules:', localResult);
+    return localResult;
+  }
+
+  // 2. Fall back to online Gemini if local rules did not match
   const isOnline = navigator.onLine;
 
   if (isOnline && apiKey) {
