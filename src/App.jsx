@@ -320,7 +320,41 @@ export default function App() {
       if (parsed.action === 'UNKNOWN') {
         throw new Error('Perintah tidak dimengerti. Silakan coba lagi.');
       }
-      setParsedPreview(parsed);
+
+      if (parsed.action === 'SALE') {
+        const saleItems = parsed.items || [];
+        if (saleItems.length === 0) {
+          throw new Error('Tidak ada produk yang terdeteksi dalam pesanan.');
+        }
+
+        let addedCount = 0;
+        for (const item of saleItems) {
+          const prod = products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+          if (prod) {
+            setCart((prev) => {
+              const existing = prev.find(c => c.id === prod.id);
+              if (existing) {
+                return prev.map(c =>
+                  c.id === prod.id ? { ...c, qty: c.qty + item.qty } : c
+                );
+              }
+              return [...prev, { ...prod, qty: item.qty }];
+            });
+            addedCount++;
+          }
+        }
+
+        if (addedCount > 0) {
+          setActiveTab('catalog');
+          setCartPulse(true);
+          setTimeout(() => setCartPulse(false), 300);
+          setSuccessMsg(`Berhasil menambahkan ${addedCount} produk ke keranjang!`);
+        } else {
+          throw new Error('Produk tidak ditemukan di Katalog. Silakan tambahkan produk terlebih dahulu.');
+        }
+      } else {
+        setParsedPreview(parsed);
+      }
     } catch (err) {
       setErrorMsg(err.message || 'Gagal memproses perintah');
     } finally {

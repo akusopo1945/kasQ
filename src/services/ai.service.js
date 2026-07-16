@@ -1,5 +1,77 @@
 import { GoogleGenAI } from '@google/genai';
 
+// Mapping of Indonesian word numbers to digits
+const INDO_NUMBERS = {
+  'satu': 1, 'se': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 'lima': 5,
+  'enam': 6, 'tujuh': 7, 'delapan': 8, 'sembilan': 9, 'sepuluh': 10,
+  'sebelas': 11, 'dua belas': 12, 'tiga belas': 13, 'empat belas': 14,
+  'lima belas': 15, 'enam belas': 16, 'tujuh belas': 17, 'delapan belas': 18,
+  'sembilan belas': 19, 'dua puluh': 20, 'tiga puluh': 30, 'empat puluh': 40,
+  'lima puluh': 50
+};
+
+export function parseCompoundLocalSale(text, localProducts = []) {
+  if (localProducts.length === 0) return null;
+  const t = text.toLowerCase().trim();
+
+  // Split by common separators/connectors
+  const parts = t.split(/(?:,|\bdan\b|\bsama\b|\blalu\b|\bserta\b|\bplus\b)/i);
+  const items = [];
+
+  for (const part of parts) {
+    const cleanPart = part.trim();
+    if (!cleanPart) continue;
+
+    let matchedProduct = null;
+    let matchedLength = 0;
+
+    for (const prod of localProducts) {
+      const prodNameLower = prod.name.toLowerCase();
+      if (cleanPart.includes(prodNameLower)) {
+        if (prodNameLower.length > matchedLength) {
+          matchedProduct = prod;
+          matchedLength = prodNameLower.length;
+        }
+      }
+    }
+
+    if (matchedProduct) {
+      let qty = 1;
+      const textWithoutProduct = cleanPart.replace(matchedProduct.name.toLowerCase(), '').trim();
+
+      // Find digit number
+      const digitMatch = textWithoutProduct.match(/\b\d+\b/);
+      if (digitMatch) {
+        qty = parseInt(digitMatch[0], 10);
+      } else {
+        // Find Indonesian word number
+        for (const [word, val] of Object.entries(INDO_NUMBERS)) {
+          const regex = new RegExp(`\\b${word}\\b`, 'i');
+          if (regex.test(textWithoutProduct)) {
+            qty = val;
+            break;
+          }
+        }
+      }
+
+      items.push({
+        name: matchedProduct.name,
+        qty,
+        price: matchedProduct.price
+      });
+    }
+  }
+
+  if (items.length > 0) {
+    return {
+      action: 'SALE',
+      items
+    };
+  }
+
+  return null;
+}
+
 // Local Offline Parser (Regex & Rules)
 export function parseLocalCommand(text, localProducts = [], localMaterials = []) {
   const t = text.toLowerCase().trim();
@@ -58,7 +130,13 @@ export function parseLocalCommand(text, localProducts = [], localMaterials = [])
     };
   }
 
-  // 4. Match Sale: "jual kopi susu 2"
+  // 4. Match Compound Local Sale: e.g. "kopi susu satu sama roti bakar dua"
+  const compoundSale = parseCompoundLocalSale(text, localProducts);
+  if (compoundSale) {
+    return compoundSale;
+  }
+
+  // 5. Fallback Match Sale: "jual kopi susu 2"
   let saleMatch = t.match(/^(?:jual|beli)?\s*([a-zA-Z\s]+?)\s+(\d+)\s*(?:pcs|biji|buah|bungkus|botol)?$/i);
   if (saleMatch) {
     const itemName = saleMatch[1].trim();
