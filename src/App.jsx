@@ -238,8 +238,9 @@ export default function App() {
       setProfileName(currentUser.name);
       setProfileBusiness(currentUser.business);
       setProfilePhone(currentUser.phone);
+      handlePullSyncData(currentUser);
     }
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -989,22 +990,109 @@ export default function App() {
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       const uId = currentUser.id;
+      // Gather all local data for this user
+      const productsList = await db.products.where('userId').equals(uId).toArray();
+      const transactionsList = await db.transactions.where('userId').equals(uId).toArray();
+      const debtsList = await db.debts.where('userId').equals(uId).toArray();
+      const materialsList = await db.materials.where('userId').equals(uId).toArray();
+
+      const syncPayload = {
+        timestamp: new Date().toISOString(),
+        phone: currentUser.phone,
+        products: productsList,
+        transactions: transactionsList,
+        debts: debtsList,
+        materials: materialsList
+      };
+
+      // Upload to kvdb.io
+      const url = `https://kvdb.io/AqyKasQSettleStore123/kasq_sync_${currentUser.phone}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(syncPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Gagal mengirim data ke server Cloud.');
+      }
+
+      // Mark local transactions as synced
       const unsynced = await db.transactions.where('userId').equals(uId).and(t => t.status_sync === 0).toArray();
       for (const t of unsynced) {
         await db.transactions.update(t.id, { status_sync: 1 });
       }
-      
-      setSuccessMsg('Sinkronisasi cloud berhasil! Seluruh data transaksi lokal Anda telah terupdate.');
-      setErrorMsg('');
+
+      setSuccessMsg('Sinkronisasi cloud berhasil! Seluruh data Anda disimpan aman di Cloud.');
       await refreshData();
     } catch (err) {
       console.error(err);
-      setErrorMsg('Gagal menyinkronkan data ke Cloud.');
+      setErrorMsg('Gagal menyinkronkan data ke Cloud: ' + err.message);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handlePullSyncData = async (targetUser) => {
+    if (!navigator.onLine || !targetUser) return;
+    try {
+      const url = `https://kvdb.io/AqyKasQSettleStore123/kasq_sync_${targetUser.phone}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        // No backup found or server error
+        return;
+      }
+      const data = await response.json();
+      if (!data || !data.products) return;
+
+      // Check if local database is empty
+      const localProducts = await db.products.where('userId').equals(targetUser.id).toArray();
+      const localTxns = await db.transactions.where('userId').equals(targetUser.id).toArray();
+
+      const restoreData = async () => {
+        // Clear local tables for this user
+        await db.products.where('userId').equals(targetUser.id).delete();
+        await db.transactions.where('userId').equals(targetUser.id).delete();
+        await db.debts.where('userId').equals(targetUser.id).delete();
+        await db.materials.where('userId').equals(targetUser.id).delete();
+
+        // Restore products
+        for (const p of data.products) {
+          const { id, ...rest } = p;
+          await db.products.add({ ...rest, userId: targetUser.id });
+        }
+        // Restore transactions (force status_sync to 1)
+        for (const t of data.transactions) {
+          const { id, ...rest } = t;
+          await db.transactions.add({ ...rest, status_sync: 1, userId: targetUser.id });
+        }
+        // Restore debts
+        for (const d of data.debts) {
+          const { id, ...rest } = d;
+          await db.debts.add({ ...rest, userId: targetUser.id });
+        }
+        // Restore materials
+        for (const m of data.materials) {
+          const { id, ...rest } = m;
+          await db.materials.add({ ...rest, userId: targetUser.id });
+        }
+
+        setSuccessMsg('Data berhasil disinkronkan & diunduh dari Cloud!');
+        await refreshData();
+      };
+
+      if (localProducts.length === 0 && localTxns.length === 0) {
+        // Auto restore if empty (Incognito/new session)
+        await restoreData();
+      } else {
+        // Ask confirmation
+        if (confirm(`Ditemukan data cadangan di Cloud tanggal ${new Date(data.timestamp).toLocaleString('id-ID')}.\n\nApakah Anda ingin mengunduh dan menimpa data lokal saat ini dengan data Cloud?`)) {
+          await restoreData();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to pull sync data:', err);
     }
   };
 
@@ -1599,7 +1687,16 @@ export default function App() {
   return (
     <div className={`min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none antialiased pb-12 ${theme === 'light' ? 'theme-light' : ''}`}>
       {/* Real-time Status and Settings Header */}
-      <HeaderStatus theme={theme} onToggleTheme={toggleTheme} currentUser={currentUser} onLogout={handleLogout} onOpenSettings={() => setActiveTab('settings')} />
+      <HeaderStatus 
+        theme={theme} 
+        onToggleTheme={toggleTheme} 
+        currentUser={currentUser} 
+        onLogout={handleLogout} 
+        onOpenSettings={() => setActiveTab('settings')} 
+        unsyncedCount={unsyncedCount}
+        isSyncing={isSyncing}
+        onPushSync={handlePushSyncData}
+      />
 
       {/* Tabs Navigation Bar */}
       <div className="w-full bg-neutral-900 border-b border-neutral-800 px-6 py-2.5 flex items-center justify-between gap-4 overflow-x-auto">

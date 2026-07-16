@@ -5,7 +5,10 @@ export default function HeaderStatus({
   onToggleTheme,
   currentUser,
   onLogout,
-  onOpenSettings
+  onOpenSettings,
+  unsyncedCount = 0,
+  isSyncing = false,
+  onPushSync
 }) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -62,6 +65,32 @@ export default function HeaderStatus({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Cloud Sync Button */}
+            {isOnline && (
+              <button
+                type="button"
+                onClick={onPushSync}
+                disabled={isSyncing || (unsyncedCount === 0 && !isSyncing)}
+                className={`relative flex items-center justify-center p-2 rounded-xl border transition-all cursor-pointer shadow-sm ${
+                  isSyncing
+                    ? 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400'
+                    : unsyncedCount > 0
+                      ? 'bg-amber-500/10 hover:bg-amber-500 border-amber-500/20 text-amber-400 hover:text-white animate-pulse'
+                      : 'bg-neutral-900 border border-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                }`}
+                title={isSyncing ? 'Sedang menyinkronkan data...' : unsyncedCount > 0 ? `Sinkronisasi Awan (${unsyncedCount} Transaksi Belum Terkirim)` : 'Seluruh data tersinkron di Cloud'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                </svg>
+                {unsyncedCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-neutral-950 font-black text-[8px] w-4 h-4 rounded-full flex items-center justify-center border border-neutral-950">
+                    {unsyncedCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Theme Toggle Button */}
             <button
               type="button"
