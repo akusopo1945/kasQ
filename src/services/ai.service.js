@@ -14,61 +14,96 @@ export function parseCompoundLocalSale(text, localProducts = []) {
   if (localProducts.length === 0) return null;
   const t = text.toLowerCase().trim();
 
-  // Split by common separators/connectors
-  const parts = t.split(/(?:,|\bdan\b|\bsama\b|\blalu\b|\bserta\b|\bplus\b)/i);
-  const items = [];
+  // Find all products present in the text
+  const matches = [];
+  for (const prod of localProducts) {
+    const prodNameLower = prod.name.toLowerCase();
+    
+    // 1. Exact match check
+    let idx = t.indexOf(prodNameLower);
+    if (idx !== -1) {
+      matches.push({
+        product: prod,
+        index: idx,
+        length: prodNameLower.length
+      });
+    }
+  }
 
-  for (const part of parts) {
-    const cleanPart = part.trim();
-    if (!cleanPart) continue;
-
-    // Clean number words and units to extract the raw spoken product name
-    const rawSpokenName = cleanPart
-      .replace(/\b(satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|dua\s+belas|tiga\s+belas|empat\s+belas|lima\s+belas|dua\s+puluh|tiga\s+puluh|empat\s+puluh|lima\s+puluh|se|\d+)\b/g, '')
-      .replace(/\b(pcs|biji|buah|bungkus|botol|porsi|mangkok|gelas|piring)\b/g, '')
-      .trim();
-
-    if (!rawSpokenName) continue;
-
-    let matchedProduct = null;
-    let matchedLength = 0;
-
+  // If no exact matches, check for partial matches of words in product names
+  if (matches.length === 0) {
     for (const prod of localProducts) {
       const prodNameLower = prod.name.toLowerCase();
-      // Partial matching (bidirectional)
-      if (prodNameLower.includes(rawSpokenName) || rawSpokenName.includes(prodNameLower)) {
-        if (prodNameLower.length > matchedLength) {
-          matchedProduct = prod;
-          matchedLength = prodNameLower.length;
-        }
-      }
-    }
-
-    if (matchedProduct) {
-      let qty = 1;
-      const textWithoutProduct = cleanPart.replace(matchedProduct.name.toLowerCase(), '').trim();
-
-      // Find digit number
-      const digitMatch = textWithoutProduct.match(/\b\d+\b/);
-      if (digitMatch) {
-        qty = parseInt(digitMatch[0], 10);
-      } else {
-        // Find Indonesian word number
-        for (const [word, val] of Object.entries(INDO_NUMBERS)) {
-          const regex = new RegExp(`\\b${word}\\b`, 'i');
-          if (regex.test(cleanPart)) {
-            qty = val;
-            break;
+      const words = prodNameLower.split(/\s+/);
+      for (const word of words) {
+        if (word.length >= 3 && t.includes(word)) {
+          const idx = t.indexOf(word);
+          if (!matches.some(m => m.product.id === prod.id)) {
+            matches.push({
+              product: prod,
+              index: idx,
+              length: word.length
+            });
           }
         }
       }
-
-      items.push({
-        name: matchedProduct.name,
-        qty,
-        price: matchedProduct.price
-      });
     }
+  }
+
+  if (matches.length === 0) return null;
+
+  // Sort matches by starting index
+  matches.sort((a, b) => a.index - b.index);
+
+  // De-duplicate overlapping matches (keep longer matched strings)
+  const filteredMatches = [];
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    let isOverlapping = false;
+    for (let j = 0; j < filteredMatches.length; j++) {
+      const existing = filteredMatches[j];
+      if (current.index >= existing.index && current.index < existing.index + existing.length) {
+        isOverlapping = true;
+        break;
+      }
+    }
+    if (!isOverlapping) {
+      filteredMatches.push(current);
+    }
+  }
+
+  const items = [];
+
+  for (let i = 0; i < filteredMatches.length; i++) {
+    const match = filteredMatches[i];
+    const nextMatch = filteredMatches[i + 1];
+
+    const startIdx = match.index + match.length;
+    const endIdx = nextMatch ? nextMatch.index : t.length;
+    const segment = t.slice(startIdx, endIdx).trim();
+
+    let qty = 1;
+
+    // Search digit in post-product text segment
+    const digitMatch = segment.match(/\b\d+\b/);
+    if (digitMatch) {
+      qty = parseInt(digitMatch[0], 10);
+    } else {
+      // Search Indonesian word number in segment
+      for (const [word, val] of Object.entries(INDO_NUMBERS)) {
+        const regex = new RegExp(`\\b${word}\\b`, 'i');
+        if (regex.test(segment)) {
+          qty = val;
+          break;
+        }
+      }
+    }
+
+    items.push({
+      name: match.product.name,
+      qty,
+      price: match.product.price
+    });
   }
 
   if (items.length > 0) {
