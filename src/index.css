@@ -40,71 +40,115 @@ html, body {
   overflow: hidden;
 }
 
-/* Light theme overrides for zero-JSX theme support */
+/* Smooth transition for theme switching */
+body, div, header, main, aside, footer, button, p, span, h1, h2, h3, h4, input, select, textarea, svg, table, th, td, tr {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Light theme CSS Variables & Overrides */
+:root {
+  --bg-app: #0a0a0a;
+  --bg-card: #171717;
+  --bg-active: #262626;
+  --border-main: #262626;
+  --text-main: #f5f5f5;
+  --text-muted: #a3a3a3;
+  --text-secondary: #737373;
+}
+
 .theme-light {
-  background-color: #f9fafb !important;
-  color: #111827 !important;
+  --bg-app: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-active: #e5e7eb;
+  --border-main: #e5e7eb;
+  --text-main: #111827;
+  --text-muted: #4b5563;
+  --text-secondary: #6b7280;
+
+  background-color: var(--bg-app) !important;
+  color: var(--text-main) !important;
 }
 
+/* Backgrounds */
 .theme-light .bg-neutral-950 {
-  background-color: #f3f4f6 !important;
+  background-color: var(--bg-app) !important;
 }
 
-.theme-light .bg-neutral-900 {
-  background-color: #ffffff !important;
+.theme-light .bg-neutral-900,
+.theme-light .bg-neutral-900\/60,
+.theme-light .bg-neutral-900\/50,
+.theme-light .bg-neutral-900\/40 {
+  background-color: var(--bg-card) !important;
 }
 
-.theme-light .bg-neutral-900\/60 {
-  background-color: rgba(255, 255, 255, 0.6) !important;
+.theme-light .bg-neutral-800,
+.theme-light .bg-neutral-850 {
+  background-color: var(--bg-active) !important;
 }
 
-.theme-light .bg-neutral-900\/50 {
-  background-color: rgba(255, 255, 255, 0.5) !important;
+/* Borders */
+.theme-light .border-neutral-800,
+.theme-light .border-neutral-800\/80,
+.theme-light .border-neutral-850,
+.theme-light .border-neutral-700,
+.theme-light .border-neutral-700\/60 {
+  border-color: var(--border-main) !important;
 }
 
-.theme-light .border-neutral-800 {
-  border-color: #e5e7eb !important;
-}
-
-.theme-light .border-neutral-800\/80 {
-  border-color: rgba(229, 231, 235, 0.8) !important;
-}
-
-.theme-light .text-white {
-  color: #111827 !important;
-}
-
+/* Text Colors */
 .theme-light .text-neutral-100 {
-  color: #1f2937 !important;
+  color: var(--text-main) !important;
 }
 
-.theme-light .text-neutral-200 {
-  color: #374151 !important;
-}
-
-.theme-light .text-neutral-300 {
-  color: #4b5563 !important;
-}
-
+.theme-light .text-neutral-200,
+.theme-light .text-neutral-300,
 .theme-light .text-neutral-400 {
-  color: #4b5563 !important;
+  color: var(--text-muted) !important;
 }
 
 .theme-light .text-neutral-500 {
-  color: #6b7280 !important;
+  color: var(--text-secondary) !important;
 }
 
 .theme-light .text-neutral-600 {
   color: #9ca3af !important;
 }
 
-/* Override chart grid and text colors for Light Mode */
+/* Ensure global .text-white translates to dark in light mode,
+   EXCEPT inside element trees that have solid primary colored backgrounds */
+.theme-light .text-white {
+  color: var(--text-main) !important;
+}
+
+/* Maintain crisp white text inside solid colored primary buttons / tags */
+.theme-light .bg-gradient-to-r,
+.theme-light .bg-gradient-to-tr,
+.theme-light .bg-violet-600,
+.theme-light .bg-indigo-600,
+.theme-light .bg-emerald-600,
+.theme-light .bg-red-500,
+.theme-light .bg-red-650,
+.theme-light .bg-red-600,
+.theme-light .bg-amber-500,
+.theme-light .bg-amber-600,
+.theme-light .bg-gradient-to-r *,
+.theme-light .bg-gradient-to-tr *,
+.theme-light .bg-violet-600 *,
+.theme-light .bg-indigo-600 *,
+.theme-light .bg-emerald-600 *,
+.theme-light .bg-red-500 *,
+.theme-light .bg-red-600 *,
+.theme-light .bg-amber-500 * {
+  color: #ffffff !important;
+}
+
+/* Chart grid and text custom colors for light mode */
 .theme-light .recharts-cartesian-grid-horizontal line,
 .theme-light .recharts-cartesian-grid-vertical line {
-  stroke: #e5e7eb !important;
+  stroke: var(--border-main) !important;
 }
 
 .theme-light .recharts-text {
-  fill: #4b5563 !important;
+  fill: var(--text-muted) !important;
 }
 
