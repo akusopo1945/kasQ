@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg', 'icon.png'],
+      includeAssets: ['favicon.png', 'favicon.svg', 'icons.svg', 'icon.png'],
       manifest: {
         name: 'KasQ POS',
         short_name: 'KasQ',

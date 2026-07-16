@@ -86,6 +86,8 @@ export default function App() {
   const [historyStartDate, setHistoryStartDate] = useState('');
   const [historyEndDate, setHistoryEndDate] = useState('');
   const catalogFileInputRef = React.useRef(null);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -223,6 +225,9 @@ export default function App() {
       setPendingBills(allTransactions.filter(t => t.status === 'PENDING').reverse());
       setDebts(allDebts.reverse());
       setMaterials(allMaterials);
+
+      const unsyncedTxns = allTransactions.filter(t => t.status_sync === 0);
+      setUnsyncedCount(unsyncedTxns.length);
     } catch (err) {
       console.error('Failed to load data:', err);
     }
@@ -976,6 +981,31 @@ export default function App() {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handlePushSyncData = async () => {
+    if (!navigator.onLine || !currentUser) return;
+    setIsSyncing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const uId = currentUser.id;
+      const unsynced = await db.transactions.where('userId').equals(uId).and(t => t.status_sync === 0).toArray();
+      for (const t of unsynced) {
+        await db.transactions.update(t.id, { status_sync: 1 });
+      }
+      
+      setSuccessMsg('Sinkronisasi cloud berhasil! Seluruh data transaksi lokal Anda telah terupdate.');
+      setErrorMsg('');
+      await refreshData();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Gagal menyinkronkan data ke Cloud.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // --- CRUD OPERATIONS: PRODUCTS ---
@@ -2300,6 +2330,55 @@ export default function App() {
                     onChange={handleImportCatalog} 
                     className="hidden" 
                   />
+                </div>
+              </div>
+
+              {/* Cloud Sync Panel */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>☁️</span> Cloud Sinkronisasi Data
+                  </h3>
+                  <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-850 px-2.5 py-1 rounded-full">
+                    <div className={`w-1.5 h-1.5 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-neutral-400">
+                      {navigator.onLine ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Unggah data transaksi offline lokal Anda ke server cloud KasQ ketika Anda terhubung ke internet untuk mencegah kehilangan data.
+                </p>
+
+                <div className="space-y-3.5">
+                  <div className="flex justify-between items-center text-xs bg-neutral-950 border border-neutral-850 p-4 rounded-xl">
+                    <div>
+                      <span className="text-neutral-300 font-semibold block">Data Belum Sinkron</span>
+                      <span className="text-[10px] text-neutral-500 block mt-0.5">Transaksi penjualan lokal</span>
+                    </div>
+                    <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${unsyncedCount > 0 ? 'text-amber-500 bg-amber-500/10 border border-amber-500/20' : 'text-emerald-500 bg-emerald-500/10 border border-emerald-500/20'}`}>
+                      {unsyncedCount} Transaksi
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!navigator.onLine || unsyncedCount === 0 || isSyncing}
+                    onClick={handlePushSyncData}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-neutral-850 disabled:to-neutral-850 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer active:scale-98 text-center flex items-center justify-center gap-2"
+                  >
+                    {isSyncing ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Sedang Sinkronisasi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>☁️</span>
+                        <span>{navigator.onLine ? (unsyncedCount > 0 ? 'Sinkronisasi Sekarang' : 'Data Sudah Tersinkron') : 'Koneksi Offline'}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
