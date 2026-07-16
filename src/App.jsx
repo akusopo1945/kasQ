@@ -3,7 +3,8 @@ import {
   LayoutDashboard, ShoppingBag, Package, FileText, Users, 
   LogOut, Plus, Search, Trash2, Edit3, AlertTriangle, 
   TrendingUp, TrendingDown, Download, Eye, EyeOff, Save, 
-  CheckCircle, XCircle, RefreshCw, BarChart2, Calculator
+  CheckCircle, XCircle, RefreshCw, BarChart2, Calculator,
+  Settings, User
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import XLSX from 'xlsx-js-style';
@@ -69,6 +70,14 @@ export default function App() {
   const [cashChange, setCashChange] = useState(0);
   const [pendingBills, setPendingBills] = useState([]);
   const [showPendingBillsModal, setShowPendingBillsModal] = useState(false);
+  const [profileName, setProfileName] = useState(currentUser ? currentUser.name : '');
+  const [profileBusiness, setProfileBusiness] = useState(currentUser ? currentUser.business : '');
+  const [profilePhone, setProfilePhone] = useState(currentUser ? currentUser.phone : '');
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -210,6 +219,14 @@ export default function App() {
       console.error('Failed to load data:', err);
     }
   };
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfileName(currentUser.name);
+      setProfileBusiness(currentUser.business);
+      setProfilePhone(currentUser.phone);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -732,6 +749,68 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setErrorMsg('Gagal memproses checkout');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- SETTINGS & PROFILE OPERATIONS ---
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!profileName || !profileBusiness || !profilePhone || !currentUser) return;
+    setIsProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await db.users.update(currentUser.id, {
+        name: profileName,
+        business: profileBusiness,
+        phone: profilePhone
+      });
+      const updatedUser = { ...currentUser, name: profileName, business: profileBusiness, phone: profilePhone };
+      setCurrentUser(updatedUser);
+      if (localStorage.getItem('kasq_session')) {
+        localStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+      } else {
+        sessionStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+      }
+      setSuccessMsg('Profil berhasil diperbarui!');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Gagal memperbarui profil. No. HP mungkin sudah terdaftar.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmPassword || !currentUser) return;
+    if (newPassword.length < 6) {
+      setErrorMsg('Password baru minimal 6 karakter');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('Konfirmasi password baru tidak cocok');
+      return;
+    }
+    setIsProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const userInDb = await db.users.get(currentUser.id);
+      if (userInDb.password !== oldPassword) {
+        setErrorMsg('Password lama salah!');
+        return;
+      }
+      await db.users.update(currentUser.id, { password: newPassword });
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSuccessMsg('Password berhasil diubah!');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Gagal mengubah password');
     } finally {
       setIsProcessing(false);
     }
@@ -1339,7 +1418,8 @@ export default function App() {
             { id: 'hpp', label: 'Kalkulator HPP', icon: Calculator },
             { id: 'materials', label: 'Bahan Baku', icon: Package },
             { id: 'debts', label: 'Utang & Kasbon', icon: Users },
-            { id: 'reports', label: 'Laporan Keuangan', icon: FileText }
+            { id: 'reports', label: 'Laporan Keuangan', icon: FileText },
+            { id: 'settings', label: 'Pengaturan & Profil', icon: Settings }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -1361,7 +1441,11 @@ export default function App() {
 
         {/* User profile & Logout */}
         <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
+          <div 
+            onClick={() => setActiveTab('settings')}
+            className="text-right hidden sm:block cursor-pointer hover:opacity-80 transition"
+            title="Klik untuk buka Pengaturan & Profil"
+          >
             <div className="text-xs font-bold text-neutral-200">{currentUser.name}</div>
             <div className="text-[10px] text-violet-400 font-semibold">{currentUser.business}</div>
           </div>
@@ -1825,6 +1909,166 @@ export default function App() {
           {activeTab === 'hpp' && (
             <HppCalculator currentUser={currentUser} onProductAdded={refreshData} />
           )}
+          {/* TAB 7: SETTINGS & PROFILE (PENGATURAN & PROFIL) */}
+          {activeTab === 'settings' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Profile Details Form */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <User size={18} className="text-violet-400" /> Profil Pengguna & Usaha
+                </h3>
+                
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Lengkap</label>
+                      <input 
+                        type="text" required placeholder="Contoh: Asep Sunandar" value={profileName} onChange={e => setProfileName(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Usaha / Toko</label>
+                      <input 
+                        type="text" required placeholder="Contoh: Kopi Asep" value={profileBusiness} onChange={e => setProfileBusiness(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">No. HP / Username</label>
+                    <input 
+                      type="text" required placeholder="Contoh: admin atau 0888..." value={profilePhone} onChange={e => setProfilePhone(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-neutral-850 disabled:to-neutral-850 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-lg transition cursor-pointer"
+                    >
+                      {isProcessing ? 'Menyimpan...' : 'Simpan Profil'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Password Change Form */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>🔒</span> Ubah Password Akun
+                </h3>
+                
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div className="relative">
+                    <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Password Saat Ini</label>
+                    <input 
+                      type={showOldPassword ? 'text' : 'password'} required placeholder="Password lama Anda" value={oldPassword} onChange={e => setOldPassword(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPassword(!showOldPassword)}
+                      className="absolute right-3.5 bottom-3 text-neutral-500 hover:text-white cursor-pointer"
+                    >
+                      {showOldPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Password Baru</label>
+                      <input 
+                        type={showNewPassword ? 'text' : 'password'} required placeholder="Password baru" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3.5 bottom-3 text-neutral-500 hover:text-white cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Konfirmasi Password Baru</label>
+                      <input 
+                        type={showNewPassword ? 'text' : 'password'} required placeholder="Ulangi password baru" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-neutral-850 disabled:to-neutral-850 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow-lg transition cursor-pointer"
+                    >
+                      {isProcessing ? 'Mengubah...' : 'Ubah Password'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Gemini API Key Panel */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>🤖</span> Konfigurasi AI Gemini API Key
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Fitur Voice AI Bookkeeper dan scan nota gambar menggunakan model Gemini AI. Masukkan Gemini API Key pribadi Anda di bawah ini jika ingin mengganti kunci bawaan. Kunci ini akan disimpan dengan aman di perangkat lokal Anda.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="relative">
+                    <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Gemini API Key</label>
+                    <input 
+                      type="password"
+                      placeholder="Masukkan Gemini API Key..."
+                      value={apiKey}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setApiKey(val);
+                        if (val) {
+                          localStorage.setItem('kasq_gemini_api_key', val);
+                        } else {
+                          localStorage.removeItem('kasq_gemini_api_key');
+                        }
+                      }}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Database Statistics Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <BarChart2 size={18} className="text-violet-400" /> Statistik Penyimpanan Database Lokal
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Katalog Produk', count: products.length, emoji: '🍔' },
+                    { label: 'Bahan Baku', count: materials.length, emoji: '🌾' },
+                    { label: 'Transaksi Selesai', count: transactions.length, emoji: '📈' },
+                    { label: 'Utang / Kasbon', count: debts.length, emoji: '👥' }
+                  ].map((stat, idx) => (
+                    <div key={idx} className="bg-neutral-950 border border-neutral-850 p-4 rounded-xl text-center space-y-1">
+                      <span className="text-lg block">{stat.emoji}</span>
+                      <span className="text-base font-black text-white block">{stat.count}</span>
+                      <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider block">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
 
         </div>
 
