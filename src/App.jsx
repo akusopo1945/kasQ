@@ -70,6 +70,8 @@ export default function App() {
   const [cashChange, setCashChange] = useState(0);
   const [pendingBills, setPendingBills] = useState([]);
   const [showPendingBillsModal, setShowPendingBillsModal] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [showFullscreenQris, setShowFullscreenQris] = useState(false);
   const [profileName, setProfileName] = useState(currentUser ? currentUser.name : '');
   const [profileBusiness, setProfileBusiness] = useState(currentUser ? currentUser.business : '');
   const [profilePhone, setProfilePhone] = useState(currentUser ? currentUser.phone : '');
@@ -586,6 +588,7 @@ export default function App() {
             <div class="bold" style="font-size: 13px;">${businessName.toUpperCase()}</div>
             <div style="font-size: 9px;">Kasir: ${userName}</div>
             <div style="font-size: 9px;">${dateStr}</div>
+            ${transaction.customerName ? `<div style="font-size: 9px; font-weight: bold; margin-top: 2px;">Pemesan: ${transaction.customerName}</div>` : ''}
           </div>
           <div class="divider"></div>
           <table>
@@ -655,9 +658,11 @@ export default function App() {
         items: cart.map(i => ({ name: i.name, qty: i.qty, price: i.price, id: i.id, lacakStok: i.lacakStok, resep: i.resep })),
         status: 'PENDING',
         paymentMethod: 'CASH',
+        customerName: customerName.trim(),
         status_sync: 0
       });
       setCart([]);
+      setCustomerName('');
       setSuccessMsg('Transaksi berhasil ditunda.');
       setErrorMsg('');
       await refreshData();
@@ -682,6 +687,7 @@ export default function App() {
         };
       });
       setCart(loadedCart);
+      setCustomerName(bill.customerName || '');
       await db.transactions.delete(bill.id);
       setShowPendingBillsModal(false);
       setSuccessMsg('Tagihan ditunda berhasil dimuat kembali.');
@@ -730,6 +736,7 @@ export default function App() {
         materialsUsed,
         status: 'PAID',
         paymentMethod,
+        customerName: customerName.trim(),
         cashReceived: paymentMethod === 'CASH' ? receivedAmount : total,
         cashChange: paymentMethod === 'CASH' ? cashChange : 0,
         status_sync: 0
@@ -742,6 +749,7 @@ export default function App() {
       }
 
       setCart([]);
+      setCustomerName('');
       setShowCheckoutModal(false);
       setSuccessMsg(`Penjualan sukses! Total: Rp ${total.toLocaleString('id-ID')}`);
       setErrorMsg('');
@@ -2029,6 +2037,84 @@ export default function App() {
                 </div>
               </div>
 
+              {/* QRIS Upload Panel */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>📱</span> QR Code Merchant QRIS
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Unggah gambar kode QRIS toko Anda (Base64) agar pelanggan dapat langsung memindai dari layar kasir saat checkout dengan metode pembayaran QRIS.
+                </p>
+
+                <div className="space-y-4">
+                  {currentUser && currentUser.qrisImage ? (
+                    <div className="flex items-center gap-4 bg-neutral-950 border border-neutral-850 p-4 rounded-xl">
+                      <img 
+                        src={currentUser.qrisImage} 
+                        alt="Merchant QRIS" 
+                        className="w-16 h-16 object-contain bg-white border border-neutral-800 rounded-lg shadow-md cursor-pointer hover:opacity-80 transition"
+                        onClick={() => setShowFullscreenQris(true)}
+                        title="Klik untuk perbesar"
+                      />
+                      <div className="flex-1 space-y-1">
+                        <span className="text-xs font-bold text-neutral-200 block">QRIS Aktif</span>
+                        <span className="text-[10px] text-neutral-500 block leading-normal">Gambar QRIS telah tersimpan offline di database lokal Anda.</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (confirm('Hapus gambar QRIS ini?')) {
+                              await db.users.update(currentUser.id, { qrisImage: null });
+                              const updatedUser = { ...currentUser, qrisImage: null };
+                              setCurrentUser(updatedUser);
+                              if (localStorage.getItem('kasq_session')) {
+                                localStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+                              } else {
+                                sessionStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+                              }
+                              setSuccessMsg('Gambar QRIS berhasil dihapus.');
+                            }
+                          }}
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold block pt-1 cursor-pointer"
+                        >
+                          Hapus Gambar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-neutral-950 border border-neutral-850 rounded-xl p-6 text-center text-xs text-neutral-500">
+                      Belum ada gambar QRIS yang diunggah.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1.5">Pilih File Gambar QRIS</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                          const base64 = event.target.result;
+                          await db.users.update(currentUser.id, { qrisImage: base64 });
+                          const updatedUser = { ...currentUser, qrisImage: base64 };
+                          setCurrentUser(updatedUser);
+                          if (localStorage.getItem('kasq_session')) {
+                            localStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+                          } else {
+                            sessionStorage.setItem('kasq_session', JSON.stringify(updatedUser));
+                          }
+                          setSuccessMsg('Gambar QRIS berhasil diunggah!');
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none file:bg-neutral-900 file:border-0 file:text-[10px] file:font-bold file:text-neutral-400 file:px-3 file:py-1 file:rounded-lg file:mr-3 file:cursor-pointer transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Database Statistics Card */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2144,6 +2230,19 @@ export default function App() {
                     </button>
                   )}
                 </div>
+
+                {cart.length > 0 && (
+                  <div className="mb-4 animate-fade-in">
+                    <label className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Pemesan / Pelanggan</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Meja 4 / Pak Joko..."
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-850 focus:border-violet-600 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 transition"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                   {cart.length === 0 ? (
@@ -2667,6 +2766,31 @@ export default function App() {
               </div>
             )}
 
+            {/* QRIS Display Panel */}
+            {paymentMethod === 'QRIS' && (
+              <div className="space-y-3 bg-neutral-950 border border-neutral-800/80 rounded-2xl p-4 text-center animate-fade-in">
+                {currentUser && currentUser.qrisImage ? (
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Pindai Kode QRIS</span>
+                    <div className="flex justify-center">
+                      <img
+                        src={currentUser.qrisImage}
+                        alt="Merchant QRIS Code"
+                        className="w-36 h-36 object-contain bg-white border border-neutral-800 rounded-xl p-1 shadow-md cursor-pointer hover:scale-105 active:scale-98 transition duration-200"
+                        onClick={() => setShowFullscreenQris(true)}
+                        title="Klik untuk perbesar QRIS"
+                      />
+                    </div>
+                    <span className="text-[8px] text-neutral-500 block">Klik gambar untuk memperbesar layar penuh</span>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-neutral-500">
+                    Belum ada gambar QRIS terpasang. Silakan unggah gambar QRIS Anda di menu <b>Pengaturan & Profil</b>.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Action buttons */}
             <div className="flex gap-2 pt-2">
               <button
@@ -2717,6 +2841,11 @@ export default function App() {
                     className="bg-neutral-950 border border-neutral-850 hover:border-violet-600 rounded-2xl p-4 flex justify-between items-center cursor-pointer transition shadow-sm group"
                   >
                     <div>
+                      {bill.customerName && (
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[8px] font-bold px-1.5 py-0.5 rounded-md inline-block mb-1">
+                          👤 {bill.customerName}
+                        </span>
+                      )}
                       <h4 className="text-xs font-bold text-neutral-200 group-hover:text-white line-clamp-2 pr-2">
                         {bill.items.map(i => `${i.name} x${i.qty}`).join(', ')}
                       </h4>
@@ -2736,6 +2865,43 @@ export default function App() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN QRIS MODAL */}
+      {showFullscreenQris && currentUser && currentUser.qrisImage && (
+        <div 
+          className="fixed inset-0 bg-neutral-950/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4 cursor-pointer"
+          onClick={() => setShowFullscreenQris(false)}
+        >
+          <div className="max-w-md w-full bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-4 relative animate-scale-up cursor-default" onClick={(e) => e.stopPropagation()}>
+            <button 
+              type="button"
+              onClick={() => setShowFullscreenQris(false)}
+              className="absolute top-4 right-4 text-neutral-500 hover:text-neutral-950 transition text-lg font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+            
+            <div className="text-center space-y-1">
+              <span className="text-neutral-900 font-extrabold text-base tracking-tight">{currentUser.business.toUpperCase()}</span>
+              <p className="text-[10px] text-neutral-500 font-medium">Silakan scan kode QRIS di bawah ini untuk membayar</p>
+            </div>
+
+            <img 
+              src={currentUser.qrisImage} 
+              alt="Merchant QRIS Fullscreen" 
+              className="w-full max-w-[320px] aspect-square object-contain border border-neutral-100 rounded-2xl p-2 shadow-inner"
+            />
+            
+            <button
+              type="button"
+              onClick={() => setShowFullscreenQris(false)}
+              className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow transition cursor-pointer"
+            >
+              Tutup QRIS
+            </button>
           </div>
         </div>
       )}
