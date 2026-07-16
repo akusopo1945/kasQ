@@ -1407,7 +1407,7 @@ export default function App() {
   return (
     <div className={`min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none antialiased pb-12 ${theme === 'light' ? 'theme-light' : ''}`}>
       {/* Real-time Status and Settings Header */}
-      <HeaderStatus apiKey={apiKey} onApiKeyChange={handleApiKeyChange} theme={theme} onToggleTheme={toggleTheme} />
+      <HeaderStatus theme={theme} onToggleTheme={toggleTheme} currentUser={currentUser} onLogout={handleLogout} onOpenSettings={() => setActiveTab('settings')} />
 
       {/* Tabs Navigation Bar */}
       <div className="w-full bg-neutral-900 border-b border-neutral-800 px-6 py-2.5 flex items-center justify-between gap-4 overflow-x-auto">
@@ -1439,24 +1439,7 @@ export default function App() {
           })}
         </div>
 
-        {/* User profile & Logout */}
-        <div className="flex items-center gap-3">
-          <div 
-            onClick={() => setActiveTab('settings')}
-            className="text-right hidden sm:block cursor-pointer hover:opacity-80 transition"
-            title="Klik untuk buka Pengaturan & Profil"
-          >
-            <div className="text-xs font-bold text-neutral-200">{currentUser.name}</div>
-            <div className="text-[10px] text-violet-400 font-semibold">{currentUser.business}</div>
-          </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center justify-center w-8 h-8 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/25 transition cursor-pointer"
-            title="Keluar Akun"
-          >
-            <LogOut size={14} />
-          </button>
-        </div>
+
       </div>
 
       {/* Alert/Status Toast */}
