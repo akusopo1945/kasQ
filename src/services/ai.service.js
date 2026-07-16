@@ -22,12 +22,21 @@ export function parseCompoundLocalSale(text, localProducts = []) {
     const cleanPart = part.trim();
     if (!cleanPart) continue;
 
+    // Clean number words and units to extract the raw spoken product name
+    const rawSpokenName = cleanPart
+      .replace(/\b(satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|sebelas|dua\s+belas|tiga\s+belas|empat\s+belas|lima\s+belas|dua\s+puluh|tiga\s+puluh|empat\s+puluh|lima\s+puluh|se|\d+)\b/g, '')
+      .replace(/\b(pcs|biji|buah|bungkus|botol|porsi|mangkok|gelas|piring)\b/g, '')
+      .trim();
+
+    if (!rawSpokenName) continue;
+
     let matchedProduct = null;
     let matchedLength = 0;
 
     for (const prod of localProducts) {
       const prodNameLower = prod.name.toLowerCase();
-      if (cleanPart.includes(prodNameLower)) {
+      // Partial matching (bidirectional)
+      if (prodNameLower.includes(rawSpokenName) || rawSpokenName.includes(prodNameLower)) {
         if (prodNameLower.length > matchedLength) {
           matchedProduct = prod;
           matchedLength = prodNameLower.length;
@@ -47,7 +56,7 @@ export function parseCompoundLocalSale(text, localProducts = []) {
         // Find Indonesian word number
         for (const [word, val] of Object.entries(INDO_NUMBERS)) {
           const regex = new RegExp(`\\b${word}\\b`, 'i');
-          if (regex.test(textWithoutProduct)) {
+          if (regex.test(cleanPart)) {
             qty = val;
             break;
           }
