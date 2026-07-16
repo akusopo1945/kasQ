@@ -61,6 +61,8 @@ export default function App() {
   const [successMsg, setSuccessMsg] = useState('');
   const [parsedPreview, setParsedPreview] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('kasq_theme') || 'dark');
+  const [animatingItems, setAnimatingItems] = useState({});
+  const [cartPulse, setCartPulse] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -449,6 +451,16 @@ export default function App() {
 
   // --- CART OPERATIONS ---
   const addToCart = (product) => {
+    setAnimatingItems((prev) => ({ ...prev, [product.id]: true }));
+    setTimeout(() => {
+      setAnimatingItems((prev) => ({ ...prev, [product.id]: false }));
+    }, 250);
+
+    setCartPulse(true);
+    setTimeout(() => {
+      setCartPulse(false);
+    }, 300);
+
     setCart((prev) => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -1302,7 +1314,9 @@ export default function App() {
                   products.map((prod) => (
                     <div 
                       key={prod.id}
-                      className="bg-neutral-900 border border-neutral-850 hover:border-violet-800/60 rounded-xl p-3.5 flex flex-col justify-between gap-3 transition shadow-sm group"
+                      className={`bg-neutral-900 border border-neutral-850 hover:border-violet-800/60 rounded-xl p-3.5 flex flex-col justify-between gap-3 transition shadow-sm group ${
+                        animatingItems[prod.id] ? 'animate-click-pop' : ''
+                      }`}
                     >
                       <div onClick={() => addToCart(prod)} className="cursor-pointer space-y-1">
                         <h4 className="text-xs sm:text-sm font-bold text-neutral-200 group-hover:text-white line-clamp-1">{prod.name}</h4>
@@ -1679,7 +1693,9 @@ export default function App() {
           {activeTab === 'catalog' && (
             <div className="bg-neutral-900/50 border border-neutral-800/80 rounded-2xl p-5 shadow-lg flex-1 flex flex-col justify-between min-h-[300px]">
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <h2 className={`text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2 transition-all duration-300 ${
+                  cartPulse ? 'scale-105 text-violet-400 font-black' : ''
+                }`}>
                   <span>🛒</span> Keranjang POS
                 </h2>
 
@@ -1688,7 +1704,7 @@ export default function App() {
                     <div className="text-center py-12 text-xs text-neutral-500">Keranjang kosong. Pilih barang di katalog.</div>
                   ) : (
                     cart.map((item) => (
-                      <div key={item.id} className="bg-neutral-950 border border-neutral-850 rounded-xl p-3 flex items-center justify-between gap-3">
+                      <div key={item.id} className="bg-neutral-950 border border-neutral-850 rounded-xl p-3 flex items-center justify-between gap-3 animate-fade-in-down">
                         <div className="min-w-0">
                           <h4 className="text-xs font-bold text-neutral-200 truncate">{item.name}</h4>
                           <span className="text-[10px] text-neutral-400">Rp {item.price.toLocaleString('id-ID')}</span>
