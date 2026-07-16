@@ -63,6 +63,12 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('kasq_theme') || 'dark');
   const [animatingItems, setAnimatingItems] = useState({});
   const [cartPulse, setCartPulse] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('CASH'); // CASH, QRIS, BANK_TRANSFER
+  const [cashReceived, setCashReceived] = useState('');
+  const [cashChange, setCashChange] = useState(0);
+  const [pendingBills, setPendingBills] = useState([]);
+  const [showPendingBillsModal, setShowPendingBillsModal] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -196,7 +202,8 @@ export default function App() {
       const allMaterials = await db.materials.where('userId').equals(uId).toArray();
 
       setProducts(allProducts);
-      setTransactions(allTransactions.reverse()); // Latest first
+      setTransactions(allTransactions.filter(t => t.status !== 'PENDING').reverse());
+      setPendingBills(allTransactions.filter(t => t.status === 'PENDING').reverse());
       setDebts(allDebts.reverse());
       setMaterials(allMaterials);
     } catch (err) {
@@ -514,21 +521,174 @@ export default function App() {
     });
   };
 
-  const handleManualCheckout = async () => {
+  // --- THERMAL RECEIPT PRINTING ---
+  const printThermalReceipt = (transaction, businessName, userName) => {
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    if (!printWindow) {
+      alert('Harap izinkan popup browser untuk mencetak struk.');
+      return;
+    }
+
+    const itemsHtml = transaction.items.map(item => `
+      <tr>
+        <td style="padding: 3px 0;">${item.name} x${item.qty}</td>
+        <td style="text-align: right; padding: 3px 0;">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
+      </tr>
+    `).join('');
+
+    const dateStr = new Date(transaction.date).toLocaleString('id-ID');
+    const paymentMethodName = {
+      'CASH': 'Tunai',
+      'QRIS': 'QRIS / E-Wallet',
+      'BANK_TRANSFER': 'Transfer Bank'
+    }[transaction.paymentMethod] || 'Tunai';
+
+    const html = `
+      <html>
+        <head>
+          <title>Struk KasQ</title>
+          <style>
+            @page { size: 58mm auto; margin: 0; }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 11px;
+              color: #000;
+              margin: 0;
+              padding: 8px;
+              width: 58mm;
+              box-sizing: border-box;
+            }
+            .text-center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider { border-top: 1px dashed #000; margin: 6px 0; }
+            table { width: 100%; border-collapse: collapse; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center">
+            <div class="bold" style="font-size: 13px;">${businessName.toUpperCase()}</div>
+            <div style="font-size: 9px;">Kasir: ${userName}</div>
+            <div style="font-size: 9px;">${dateStr}</div>
+          </div>
+          <div class="divider"></div>
+          <table>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          <div class="divider"></div>
+          <table>
+            <tr>
+              <td class="bold">TOTAL</td>
+              <td class="bold" style="text-align: right;">Rp ${transaction.total.toLocaleString('id-ID')}</td>
+            </tr>
+            <tr>
+              <td>Metode</td>
+              <td style="text-align: right;">${paymentMethodName}</td>
+            </tr>
+            ${transaction.cashReceived ? `
+            <tr>
+              <td>Bayar</td>
+              <td style="text-align: right;">Rp ${transaction.cashReceived.toLocaleString('id-ID')}</td>
+            </tr>
+            <tr>
+              <td>Kembali</td>
+              <td style="text-align: right;">Rp ${transaction.cashChange.toLocaleString('id-ID')}</td>
+            </tr>
+            ` : ''}
+          </table>
+          <div class="divider"></div>
+          <div class="text-center" style="font-size: 8px; margin-top: 8px;">
+            Terima Kasih!<br>Powered by KasQ
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  // --- CHECKOUT & BILL SUSPENSION HANDLERS ---
+  const openCheckoutModal = () => {
+    if (cart.length === 0) return;
+    const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+    setPaymentMethod('CASH');
+    setCashReceived('');
+    setCashChange(0);
+    setShowCheckoutModal(true);
+  };
+
+  const executeHoldBill = async () => {
+    if (cart.length === 0 || !currentUser) return;
+    try {
+      const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+      await db.transactions.add({
+        type: 'SALE',
+        total: total,
+        date: new Date().toISOString(),
+        userId: currentUser.id,
+        items: cart.map(i => ({ name: i.name, qty: i.qty, price: i.price, id: i.id, lacakStok: i.lacakStok, resep: i.resep })),
+        status: 'PENDING',
+        paymentMethod: 'CASH',
+        status_sync: 0
+      });
+      setCart([]);
+      setSuccessMsg('Transaksi berhasil ditunda.');
+      setErrorMsg('');
+      await refreshData();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Gagal menunda transaksi');
+    }
+  };
+
+  const recallPendingBill = async (bill) => {
+    try {
+      const loadedCart = bill.items.map(item => {
+        const originalProd = products.find(p => p.id === item.id);
+        return {
+          ...originalProd,
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          qty: item.qty,
+          lacakStok: item.lacakStok,
+          resep: item.resep
+        };
+      });
+      setCart(loadedCart);
+      await db.transactions.delete(bill.id);
+      setShowPendingBillsModal(false);
+      setSuccessMsg('Tagihan ditunda berhasil dimuat kembali.');
+      setErrorMsg('');
+      await refreshData();
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Gagal memuat kembali tagihan');
+    }
+  };
+
+  const handleCompleteCheckout = async (printReceipt = false) => {
     if (cart.length === 0 || !currentUser) return;
     setIsProcessing(true);
     try {
-      let total = 0;
+      const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
       let materialsUsed = [];
 
       for (const item of cart) {
-        total += item.price * item.qty;
         if (item.lacakStok) {
           const newStock = Math.max(0, item.stock - item.qty);
           await db.products.update(item.id, { stock: newStock });
         }
 
-        // Deduct raw materials based on recipe
         if (item.resep && item.resep.length > 0) {
           for (const r of item.resep) {
             const mat = materials.find(m => m.id === r.materialId);
@@ -542,21 +702,36 @@ export default function App() {
         }
       }
 
-      await db.transactions.add({
+      const receivedAmount = cashReceived ? parseInt(cashReceived.replace(/[^\d]/g, ''), 10) : total;
+
+      const txnData = {
         type: 'SALE',
         total: total,
         date: new Date().toISOString(),
         userId: currentUser.id,
         items: cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
         materialsUsed,
+        status: 'PAID',
+        paymentMethod,
+        cashReceived: paymentMethod === 'CASH' ? receivedAmount : total,
+        cashChange: paymentMethod === 'CASH' ? cashChange : 0,
         status_sync: 0
-      });
+      };
+
+      await db.transactions.add(txnData);
+
+      if (printReceipt) {
+        printThermalReceipt(txnData, currentUser.business, currentUser.name);
+      }
 
       setCart([]);
+      setShowCheckoutModal(false);
       setSuccessMsg(`Penjualan sukses! Total: Rp ${total.toLocaleString('id-ID')}`);
+      setErrorMsg('');
       await refreshData();
     } catch (err) {
-      setErrorMsg('Gagal memproses transaksi keranjang');
+      console.error(err);
+      setErrorMsg('Gagal memproses checkout');
     } finally {
       setIsProcessing(false);
     }
@@ -1727,11 +1902,21 @@ export default function App() {
           {activeTab === 'catalog' && (
             <div className="bg-neutral-900/50 border border-neutral-800/80 rounded-2xl p-5 shadow-lg flex-1 flex flex-col justify-between min-h-[300px]">
               <div>
-                <h2 className={`text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2 transition-all duration-300 ${
-                  cartPulse ? 'scale-105 text-violet-400 font-black' : ''
-                }`}>
-                  <span>🛒</span> Keranjang POS
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className={`text-base sm:text-lg font-bold text-white flex items-center gap-2 transition-all duration-300 ${
+                    cartPulse ? 'scale-105 text-violet-400 font-black' : ''
+                  }`}>
+                    <span>🛒</span> Keranjang POS
+                  </h2>
+                  {pendingBills.length > 0 && (
+                    <button
+                      onClick={() => setShowPendingBillsModal(true)}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      📂 {pendingBills.length} Ditunda
+                    </button>
+                  )}
+                </div>
 
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                   {cart.length === 0 ? (
@@ -1772,12 +1957,20 @@ export default function App() {
                       Rp {cart.reduce((sum, item) => sum + item.price * item.qty, 0).toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <button
-                    onClick={handleManualCheckout}
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer active:scale-98"
-                  >
-                    Bayar & Simpan Transaksi
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={executeHoldBill}
+                      className="flex-1 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 border border-neutral-700 text-xs font-bold py-3 rounded-xl transition cursor-pointer active:scale-98"
+                    >
+                      ⏳ Tunda Bill
+                    </button>
+                    <button
+                      onClick={openCheckoutModal}
+                      className="flex-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer active:scale-98 text-center"
+                    >
+                      💳 Checkout
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2141,6 +2334,182 @@ export default function App() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* CHECKOUT MODAL */}
+      {showCheckoutModal && (
+        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-5 relative">
+            <button 
+              type="button"
+              onClick={() => setShowCheckoutModal(false)}
+              className="absolute top-4 right-4 text-neutral-500 hover:text-white transition text-sm cursor-pointer"
+            >
+              ✕
+            </button>
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <span>💳</span> Pembayaran & Checkout
+            </h3>
+
+            {/* Total Display */}
+            <div className="bg-neutral-950 border border-neutral-800/80 rounded-2xl p-4 text-center">
+              <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Total Tagihan</span>
+              <span className="text-2xl font-black text-emerald-400">
+                Rp {cart.reduce((sum, item) => sum + item.price * item.qty, 0).toLocaleString('id-ID')}
+              </span>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-2">
+              <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Metode Pembayaran</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'CASH', label: '💵 Tunai' },
+                  { id: 'QRIS', label: '📱 QRIS' },
+                  { id: 'BANK_TRANSFER', label: '💳 Bank' }
+                ].map(method => (
+                  <button
+                    type="button"
+                    key={method.id}
+                    onClick={() => setPaymentMethod(method.id)}
+                    className={`py-3 text-xs font-bold rounded-xl border transition cursor-pointer ${
+                      paymentMethod === method.id
+                        ? 'bg-violet-600/10 border-violet-600 text-violet-400'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {method.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Cash Calculator Panel */}
+            {paymentMethod === 'CASH' && (
+              <div className="space-y-3 bg-neutral-950 border border-neutral-800/80 rounded-2xl p-4">
+                <div>
+                  <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1.5">Uang Diterima (Rp)</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 50.000"
+                    value={cashReceived}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^\d]/g, '');
+                      setCashReceived(val ? parseInt(val, 10).toLocaleString('id-ID') : '');
+                      const totalBill = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+                      const received = val ? parseInt(val, 10) : 0;
+                      setCashChange(Math.max(0, received - totalBill));
+                    }}
+                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2.5 text-xs text-neutral-200 outline-none w-full"
+                  />
+                </div>
+
+                {/* presets */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const totalBill = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+                    const presets = [
+                      totalBill,
+                      10000, 20000, 50000, 100000
+                    ].filter(val => val >= totalBill);
+                    const uniquePresets = Array.from(new Set(presets)).sort((a,b) => a-b);
+                    return uniquePresets.map((val, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => {
+                          setCashReceived(val.toLocaleString('id-ID'));
+                          setCashChange(val - totalBill);
+                        }}
+                        className="bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-[10px] text-neutral-300 font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                      >
+                        {val === totalBill ? 'Pas' : `Rp ${val.toLocaleString('id-ID')}`}
+                      </button>
+                    ));
+                  })()}
+                </div>
+
+                {/* Change amount */}
+                <div className="flex justify-between items-center pt-2 border-t border-neutral-800/80">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Uang Kembali</span>
+                  <span className="text-base font-bold text-amber-400">
+                    Rp {cashChange.toLocaleString('id-ID')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleCompleteCheckout(false)}
+                className="flex-1 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 border border-neutral-700 text-xs font-bold py-3 rounded-xl transition cursor-pointer"
+              >
+                Bayar Saja
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCompleteCheckout(true)}
+                className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer"
+              >
+                🖨️ Bayar & Cetak
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PENDING BILLS MODAL */}
+      {showPendingBillsModal && (
+        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 max-w-md w-full rounded-3xl p-6 shadow-2xl space-y-4 relative">
+            <button 
+              type="button"
+              onClick={() => setShowPendingBillsModal(false)}
+              className="absolute top-4 right-4 text-neutral-500 hover:text-white transition text-sm cursor-pointer"
+            >
+              ✕
+            </button>
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <span>📂</span> Daftar Tagihan Ditunda
+            </h3>
+            <p className="text-[11px] text-neutral-500">
+              Pilih tagihan yang ingin Anda selesaikan pembayarannya.
+            </p>
+
+            <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+              {pendingBills.length === 0 ? (
+                <div className="text-center py-12 text-xs text-neutral-500">Tidak ada tagihan tertunda.</div>
+              ) : (
+                pendingBills.map((bill) => (
+                  <div 
+                    key={bill.id}
+                    onClick={() => recallPendingBill(bill)}
+                    className="bg-neutral-950 border border-neutral-850 hover:border-violet-600 rounded-2xl p-4 flex justify-between items-center cursor-pointer transition shadow-sm group"
+                  >
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-200 group-hover:text-white line-clamp-2 pr-2">
+                        {bill.items.map(i => `${i.name} x${i.qty}`).join(', ')}
+                      </h4>
+                      <span className="text-[9px] text-neutral-500 mt-1 block">
+                        {new Date(bill.date).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="text-right flex flex-col flex-shrink-0">
+                      <span className="text-xs font-bold text-emerald-400">
+                        Rp {bill.total.toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-[8px] font-bold text-amber-500 uppercase tracking-wider mt-0.5">
+                        ⏳ Muat Ulang
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
