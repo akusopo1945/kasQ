@@ -38,5 +38,16 @@ export async function seedTestUser() {
     });
     await seedUserProducts(userId);
   }
+
+  const adminUser = await db.users.where('phone').equals('admin').first();
+  if (!adminUser) {
+    const userId = await db.users.add({
+      phone: 'admin',
+      password: 'Bismillah',
+      name: 'Administrator',
+      business: 'KasQ Headquarter'
+    });
+    await seedUserProducts(userId);
+  }
 }
 
