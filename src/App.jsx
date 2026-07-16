@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import XLSX from 'xlsx-js-style';
+import html2canvas from 'html2canvas';
 
 import HeaderStatus from './components/HeaderStatus';
 import VoiceButton from './components/VoiceButton';
@@ -80,6 +81,11 @@ export default function App() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [activeCaptureTxn, setActiveCaptureTxn] = useState(null);
+  const [historyFilterType, setHistoryFilterType] = useState('TODAY');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
+  const catalogFileInputRef = React.useRef(null);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -824,6 +830,154 @@ export default function App() {
     }
   };
 
+  // --- JPG RECEIPT CAPTURE EFFECT ---
+  useEffect(() => {
+    if (activeCaptureTxn) {
+      const exportJpg = async () => {
+        const element = document.getElementById('receipt-capture');
+        if (element) {
+          try {
+            const canvas = await html2canvas(element, {
+              scale: 2, // High resolution
+              useCORS: true,
+              backgroundColor: '#ffffff'
+            });
+            const link = document.createElement('a');
+            link.download = `Struk_${activeCaptureTxn.id}_${new Date(activeCaptureTxn.date).getTime()}.jpg`;
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+            setSuccessMsg('Struk berhasil disimpan sebagai gambar JPG!');
+          } catch (e) {
+            console.error('Gagal cetak JPG:', e);
+            setErrorMsg('Gagal mencetak struk ke JPG');
+          } finally {
+            setActiveCaptureTxn(null);
+          }
+        }
+      };
+      setTimeout(exportJpg, 200);
+    }
+  }, [activeCaptureTxn]);
+
+  // --- SALES HISTORY FILTER HELPER ---
+  const getFilteredHistory = () => {
+    const now = new Date();
+    return transactions.filter(t => {
+      if (t.type !== 'SALE') return false;
+
+      const tDate = new Date(t.date);
+      if (historyFilterType === 'TODAY') {
+        return tDate.toDateString() === now.toDateString();
+      } else if (historyFilterType === 'WEEK') {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(now.getDate() - 7);
+        return tDate >= oneWeekAgo && tDate <= now;
+      } else if (historyFilterType === 'CUSTOM') {
+        const start = historyStartDate ? new Date(historyStartDate) : null;
+        const end = historyEndDate ? new Date(historyEndDate) : null;
+        if (start) start.setHours(0,0,0,0);
+        if (end) end.setHours(23,59,59,999);
+
+        if (start && end) return tDate >= start && tDate <= end;
+        if (start) return tDate >= start;
+        if (end) return tDate <= end;
+      }
+      return true;
+    });
+  };
+
+  // --- CATALOG CSV IMPORT & TEMPLATE ---
+  const downloadCsvTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Nama,Harga,Stok,LacakStok\n"
+      + "Kopi Susu,15000,50,true\n"
+      + "Roti Bakar,12000,0,false\n"
+      + "Indomie Goreng,8000,100,true\n";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "template_katalog_kasq.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportCatalog = (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target.result;
+        let importedCount = 0;
+
+        if (file.name.endsWith('.json')) {
+          const rawData = JSON.parse(text);
+          const list = Array.isArray(rawData) ? rawData : (rawData.produk || []);
+          if (list.length === 0) {
+            throw new Error('Format JSON katalog produk tidak valid.');
+          }
+          for (const p of list) {
+            if (!p.name || isNaN(p.price)) continue;
+            const exists = products.some(pr => pr.name.toLowerCase() === p.name.toLowerCase());
+            if (!exists) {
+              await db.products.add({
+                name: p.name,
+                price: parseInt(p.price, 10),
+                stock: parseInt(p.stock, 10) || 0,
+                lacakStok: p.lacakStok !== undefined ? !!p.lacakStok : true,
+                resep: p.resep || [],
+                userId: currentUser.id
+              });
+              importedCount++;
+            }
+          }
+        } else if (file.name.endsWith('.csv')) {
+          const lines = text.split(/\r?\n/);
+          if (lines.length < 2) {
+            throw new Error('File CSV kosong.');
+          }
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cols = line.split(',').map(c => c.trim());
+            const p = {};
+            headers.forEach((h, idx) => {
+              p[h] = cols[idx];
+            });
+
+            if (!p.nama || !p.harga || isNaN(p.harga)) continue;
+            const exists = products.some(pr => pr.name.toLowerCase() === p.nama.toLowerCase());
+            if (!exists) {
+              await db.products.add({
+                name: p.nama,
+                price: parseInt(p.harga, 10),
+                stock: parseInt(p.stok, 10) || 0,
+                lacakStok: p.lacakstok ? p.lacakstok.toLowerCase() === 'true' : true,
+                resep: [],
+                userId: currentUser.id
+              });
+              importedCount++;
+            }
+          }
+        } else {
+          throw new Error('Ekstensi file tidak didukung. Gunakan .csv atau .json');
+        }
+
+        setSuccessMsg(`Sukses! Berhasil mengimpor ${importedCount} produk baru ke katalog.`);
+        setErrorMsg('');
+        await refreshData();
+      } catch (err) {
+        console.error(err);
+        setErrorMsg(err.message || 'Gagal mengimpor file katalog.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // --- CRUD OPERATIONS: PRODUCTS ---
   const handleSaveProduct = async (e) => {
     e.preventDefault();
@@ -1427,6 +1581,7 @@ export default function App() {
             { id: 'materials', label: 'Bahan Baku', icon: Package },
             { id: 'debts', label: 'Utang & Kasbon', icon: Users },
             { id: 'reports', label: 'Laporan Keuangan', icon: FileText },
+            { id: 'history', label: 'Riwayat Penjualan', icon: FileText },
             { id: 'settings', label: 'Pengaturan & Profil', icon: Settings }
           ].map(tab => {
             const Icon = tab.icon;
@@ -2115,6 +2270,39 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Product Catalog Import Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 p-6 rounded-2xl shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span>📥</span> Impor Katalog Produk (CSV / JSON)
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Percepat pengisian menu toko Anda! Unduh template CSV katalog produk KasQ, isi data Anda, lalu unggah kembali file tersebut di bawah ini. Anda juga dapat menggunakan file produk (.json).
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button 
+                    type="button"
+                    onClick={downloadCsvTemplate}
+                    className="flex-1 text-center text-xs bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white font-bold py-2.5 rounded-xl transition cursor-pointer border border-violet-500/20"
+                  >
+                    📝 Unduh Template CSV
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => catalogFileInputRef.current.click()}
+                    className="flex-1 text-center text-xs bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-bold py-2.5 rounded-xl border border-neutral-700 transition cursor-pointer"
+                  >
+                    📤 Unggah CSV / JSON
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={catalogFileInputRef} 
+                    accept=".json,.csv" 
+                    onChange={handleImportCatalog} 
+                    className="hidden" 
+                  />
+                </div>
+              </div>
+
               {/* Database Statistics Card */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2133,6 +2321,124 @@ export default function App() {
                       <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider block">{stat.label}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: SALES HISTORY (RIWAYAT PENJUALAN) */}
+          {activeTab === 'history' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Filters Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-5 shadow-lg space-y-4">
+                <h3 className="text-xs text-neutral-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🔍</span> Filter Riwayat Penjualan
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Rentang Waktu</label>
+                    <select
+                      value={historyFilterType}
+                      onChange={(e) => setHistoryFilterType(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2 text-xs text-neutral-200 outline-none transition cursor-pointer"
+                    >
+                      <option value="TODAY">Hari Ini (Harian)</option>
+                      <option value="WEEK">7 Hari Terakhir (Mingguan)</option>
+                      <option value="CUSTOM">Rentang Tanggal Custom</option>
+                    </select>
+                  </div>
+
+                  {historyFilterType === 'CUSTOM' && (
+                    <>
+                      <div>
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Dari Tanggal</label>
+                        <input
+                          type="date"
+                          value={historyStartDate}
+                          onChange={(e) => setHistoryStartDate(e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2 text-xs text-neutral-200 outline-none transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Sampai Tanggal</label>
+                        <input
+                          type="date"
+                          value={historyEndDate}
+                          onChange={(e) => setHistoryEndDate(e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-850 rounded-xl px-3 py-2 text-xs text-neutral-200 outline-none transition"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Transactions List */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>🧾</span> Daftar Struk Penjualan
+                  </h3>
+                  <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-bold px-2.5 py-1 rounded-full">
+                    {getFilteredHistory().length} Transaksi
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  {getFilteredHistory().length === 0 ? (
+                    <div className="text-center py-20 text-xs text-neutral-500">Tidak ada riwayat penjualan pada rentang ini.</div>
+                  ) : (
+                    getFilteredHistory().map((txn) => (
+                      <div 
+                        key={txn.id}
+                        className="bg-neutral-950 border border-neutral-850 rounded-2xl p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-3.5"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-bold text-neutral-200">INV-{new Date(txn.date).getTime().toString().slice(-6)}</span>
+                            {txn.customerName && (
+                              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[8px] font-bold px-1.5 py-0.5 rounded">
+                                👤 {txn.customerName}
+                              </span>
+                            )}
+                            <span className="bg-neutral-900 text-neutral-400 text-[8px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              {txn.paymentMethod === 'CASH' ? 'Tunai' : txn.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-neutral-400 font-medium">
+                            {txn.items.map(i => `${i.name} (x${i.qty})`).join(', ')}
+                          </p>
+                          <span className="text-[9px] text-neutral-500 block">
+                            {new Date(txn.date).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between md:justify-end gap-4 border-t border-neutral-900 pt-3 md:pt-0 md:border-0">
+                          <span className="text-sm font-black text-emerald-400">
+                            Rp {txn.total.toLocaleString('id-ID')}
+                          </span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => printThermalReceipt(txn, currentUser.business, currentUser.name)}
+                              className="bg-neutral-900 hover:bg-neutral-800 text-[10px] text-neutral-300 font-bold px-3 py-2 rounded-lg transition border border-neutral-800"
+                              title="Cetak struk ke printer thermal"
+                            >
+                              🖨️ Struk
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveCaptureTxn(txn)}
+                              className="bg-violet-600/10 hover:bg-violet-600 text-[10px] text-violet-400 hover:text-white font-bold px-3 py-2 rounded-lg border border-violet-500/20 transition"
+                              title="Ekspor struk ke gambar JPG"
+                            >
+                              🖼️ Simpan JPG
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -2865,6 +3171,64 @@ export default function App() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* HIDDEN CAPTURE CONTAINER FOR RECEIPTS JPG EXPORT */}
+      {activeCaptureTxn && currentUser && (
+        <div 
+          id="receipt-capture" 
+          className="absolute -left-[9999px] top-0 bg-white text-black font-mono text-[10px] p-6 w-[280px]"
+          style={{ color: '#000', backgroundColor: '#fff' }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{currentUser.business.toUpperCase()}</div>
+            <div style={{ fontSize: '9px' }}>Kasir: {currentUser.name}</div>
+            <div style={{ fontSize: '9px' }}>{new Date(activeCaptureTxn.date).toLocaleString('id-ID')}</div>
+            {activeCaptureTxn.customerName && (
+              <div style={{ fontSize: '9px', fontWeight: 'bold', marginTop: '2px' }}>Pemesan: {activeCaptureTxn.customerName}</div>
+            )}
+          </div>
+          <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }}></div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {activeCaptureTxn.items.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding: '2px 0' }}>{item.name} x{item.qty}</td>
+                  <td style={{ textAlign: 'right', padding: '2px 0' }}>Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }}></div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tr>
+              <td style={{ fontWeight: 'bold' }}>TOTAL</td>
+              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>Rp {activeCaptureTxn.total.toLocaleString('id-ID')}</td>
+            </tr>
+            <tr>
+              <td>Metode</td>
+              <td style={{ textAlign: 'right' }}>
+                {activeCaptureTxn.paymentMethod === 'CASH' ? 'Tunai' : activeCaptureTxn.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer Bank'}
+              </td>
+            </tr>
+            {activeCaptureTxn.cashReceived && (
+              <>
+                <tr>
+                  <td>Bayar</td>
+                  <td style={{ textAlign: 'right' }}>Rp {activeCaptureTxn.cashReceived.toLocaleString('id-ID')}</td>
+                </tr>
+                <tr>
+                  <td>Kembali</td>
+                  <td style={{ textAlign: 'right' }}>Rp {activeCaptureTxn.cashChange.toLocaleString('id-ID')}</td>
+                </tr>
+              </>
+            )}
+          </table>
+          <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }}></div>
+          <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '8px' }}>
+            Terima Kasih!<br/>Powered by KasQ
           </div>
         </div>
       )}
