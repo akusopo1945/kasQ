@@ -197,6 +197,29 @@ export default function App() {
       await seedTestUser();
       if (currentUser) {
         await refreshData();
+
+        // Request all PWA permissions at startup once logged in
+        setTimeout(async () => {
+          // 1. Request Notification Permission
+          if ('Notification' in window && Notification.permission === 'default') {
+            try {
+              await Notification.requestPermission();
+            } catch (e) {
+              console.error('Gagal meminta izin notifikasi:', e);
+            }
+          }
+
+          // 2. Request Mic & Camera Permission
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+              stream.getTracks().forEach(track => track.stop());
+              console.log('Izin Kamera & Mikrofon berhasil diberikan');
+            } catch (err) {
+              console.warn('Izin Kamera/Mikrofon ditolak atau tidak didukung:', err);
+            }
+          }
+        }, 1000);
       }
       const remembered = localStorage.getItem('kasq_remembered_phone');
       if (remembered) {
