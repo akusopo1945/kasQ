@@ -3,13 +3,14 @@ import {
   LayoutDashboard, ShoppingBag, Package, FileText, Users, 
   LogOut, Plus, Search, Trash2, Edit3, AlertTriangle, 
   TrendingUp, TrendingDown, Download, Eye, EyeOff, Save, 
-  CheckCircle, XCircle, RefreshCw, BarChart2
+  CheckCircle, XCircle, RefreshCw, BarChart2, Calculator
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import XLSX from 'xlsx-js-style';
 
 import HeaderStatus from './components/HeaderStatus';
 import VoiceButton from './components/VoiceButton';
+import HppCalculator from './components/HppCalculator';
 import { Camera, CameraResultType } from '@capacitor/camera';
 import { db, seedUserProducts, seedTestUser } from './services/db.service';
 import { parseCommand, parseImageCommand } from './services/ai.service';
@@ -67,8 +68,17 @@ export default function App() {
     localStorage.setItem('kasq_theme', nextTheme);
   };
 
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h >= 4 && h < 11) return 'Selamat pagi';
+    if (h >= 11 && h < 15) return 'Selamat siang';
+    if (h >= 15 && h < 19) return 'Selamat sore';
+    return 'Selamat malam';
+  };
+
   // Cart for POS Sales
   const [cart, setCart] = useState([]);
+  const backupFileInputRef = React.useRef(null);
 
   // Modal / Form States
   const [showProductForm, setShowProductForm] = useState(false);
@@ -681,6 +691,179 @@ export default function App() {
     }
   };
 
+  // --- BACKUP & RESTORE FUNCTIONALITIES (KasKu UMKM like) ---
+  const handleExportBackup = async () => {
+    if (!currentUser) return;
+    try {
+      const uId = currentUser.id;
+      const products = await db.products.where('userId').equals(uId).toArray();
+      const transactions = await db.transactions.where('userId').equals(uId).toArray();
+      const materials = await db.materials.where('userId').equals(uId).toArray();
+      const debts = await db.debts.where('userId').equals(uId).toArray();
+
+      // Read HPP localStorage inputs for backup
+      let hpp = null;
+      try {
+        hpp = {
+          bahan: JSON.parse(localStorage.getItem(`kasku_hpp_bahan_${uId}`)),
+          namaproduk: localStorage.getItem(`kasku_hpp_namaproduk_${uId}`),
+          tenaga: localStorage.getItem(`kasku_hpp_tenaga_${uId}`),
+          overhead: localStorage.getItem(`kasku_hpp_overhead_${uId}`),
+          jumlah: localStorage.getItem(`kasku_hpp_jumlah_${uId}`),
+          margin: localStorage.getItem(`kasku_hpp_margin_${uId}`),
+        };
+      } catch (e) {
+        console.error('Failed to read HPP data for backup', e);
+      }
+
+      const payload = {
+        app: 'KasQ',
+        version: '1.0.0',
+        userId: uId,
+        date: new Date().toISOString(),
+        products,
+        transactions,
+        materials,
+        debts,
+        hpp
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeBiz = (currentUser.business || 'usaha').replace(/[^a-zA-Z0-9]/g, '_');
+      const dateTag = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `KasQ_Backup_${safeBiz}_${dateTag}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMsg('Data cadangan berhasil diunduh!');
+      setErrorMsg('');
+    } catch (err) {
+      console.error('Backup failed:', err);
+      setErrorMsg('Gagal membuat file cadangan');
+    }
+  };
+
+  const triggerImportBackup = () => {
+    if (backupFileInputRef.current) {
+      backupFileInputRef.current.click();
+    }
+  };
+
+  const handleImportBackup = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !currentUser) return;
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      let data;
+      try {
+        data = JSON.parse(ev.target.result);
+      } catch (err) {
+        setErrorMsg('File tidak valid - pastikan memilih file cadangan JSON KasQ');
+        e.target.value = '';
+        return;
+      }
+
+      const known = ['products', 'transactions', 'materials', 'debts'];
+      if (!data || !known.some(k => Array.isArray(data[k]))) {
+        setErrorMsg('Format file cadangan tidak dikenali');
+        e.target.value = '';
+        return;
+      }
+
+      const ok = window.confirm(
+        'Impor data dari file ini?\n\nPERINGATAN: Seluruh data produk, transaksi, bahan baku, utang, dan kalkulator HPP milik Anda saat ini akan dihapus dan digantikan oleh data dari file cadangan ini. Tindakan ini tidak dapat dibatalkan.'
+      );
+      if (!ok) {
+        e.target.value = '';
+        return;
+      }
+
+      try {
+        const uId = currentUser.id;
+
+        // 1. Restore Products
+        if (Array.isArray(data.products)) {
+          const oldProds = await db.products.where('userId').equals(uId).toArray();
+          for (const p of oldProds) {
+            await db.products.delete(p.id);
+          }
+          for (const p of data.products) {
+            const { id, ...rest } = p;
+            await db.products.add({ ...rest, userId: uId });
+          }
+        }
+
+        // 2. Restore Transactions
+        if (Array.isArray(data.transactions)) {
+          const oldTxns = await db.transactions.where('userId').equals(uId).toArray();
+          for (const t of oldTxns) {
+            await db.transactions.delete(t.id);
+          }
+          for (const t of data.transactions) {
+            const { id, ...rest } = t;
+            const itemDate = rest.date ? new Date(rest.date) : new Date();
+            await db.transactions.add({ ...rest, date: itemDate, userId: uId });
+          }
+        }
+
+        // 3. Restore Materials
+        if (Array.isArray(data.materials)) {
+          const oldMats = await db.materials.where('userId').equals(uId).toArray();
+          for (const m of oldMats) {
+            await db.materials.delete(m.id);
+          }
+          for (const m of data.materials) {
+            const { id, ...rest } = m;
+            await db.materials.add({ ...rest, userId: uId });
+          }
+        }
+
+        // 4. Restore Debts
+        if (Array.isArray(data.debts)) {
+          const oldDebts = await db.debts.where('userId').equals(uId).toArray();
+          for (const d of oldDebts) {
+            await db.debts.delete(d.id);
+          }
+          for (const d of data.debts) {
+            const { id, ...rest } = d;
+            const itemDate = rest.date ? new Date(rest.date) : new Date();
+            await db.debts.add({ ...rest, date: itemDate, userId: uId });
+          }
+        }
+
+        // 5. Restore HPP inputs
+        if (data.hpp && typeof data.hpp === 'object') {
+          const h = data.hpp;
+          if (h.bahan) localStorage.setItem(`kasku_hpp_bahan_${uId}`, JSON.stringify(h.bahan));
+          if (h.namaproduk !== null && h.namaproduk !== undefined) localStorage.setItem(`kasku_hpp_namaproduk_${uId}`, h.namaproduk);
+          if (h.tenaga !== null && h.tenaga !== undefined) localStorage.setItem(`kasku_hpp_tenaga_${uId}`, h.tenaga);
+          if (h.overhead !== null && h.overhead !== undefined) localStorage.setItem(`kasku_hpp_overhead_${uId}`, h.overhead);
+          if (h.jumlah !== null && h.jumlah !== undefined) localStorage.setItem(`kasku_hpp_jumlah_${uId}`, h.jumlah);
+          if (h.margin !== null && h.margin !== undefined) localStorage.setItem(`kasku_hpp_margin_${uId}`, h.margin);
+        }
+
+        setSuccessMsg('Data berhasil dipulihkan sepenuhnya dari file cadangan!');
+        setErrorMsg('');
+        await refreshData();
+      } catch (err) {
+        console.error('Restore failed:', err);
+        setErrorMsg('Gagal memulihkan data dari file cadangan');
+      } finally {
+        e.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setErrorMsg('Gagal membaca file backup');
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   // --- EXPORT FUNCTIONALITIES ---
   const exportPDF = () => {
     if (!currentUser) return;
@@ -932,6 +1115,7 @@ export default function App() {
           {[
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'catalog', label: 'POS & Katalog', icon: ShoppingBag },
+            { id: 'hpp', label: 'Kalkulator HPP', icon: Calculator },
             { id: 'materials', label: 'Bahan Baku', icon: Package },
             { id: 'debts', label: 'Utang & Kasbon', icon: Users },
             { id: 'reports', label: 'Laporan Keuangan', icon: FileText }
@@ -993,6 +1177,16 @@ export default function App() {
           {/* TAB 1: DASHBOARD OVERVIEW */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              {/* Sapaan Header */}
+              <div className="flex flex-col gap-0.5">
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  {getGreeting()}, {currentUser ? currentUser.name : 'Rekan UMKM'}!
+                </h1>
+                <p className="text-xs text-neutral-500 font-medium">
+                  Bagaimana kondisi usaha <span className="text-white font-bold">{currentUser ? currentUser.business : 'toko Anda'}</span> hari ini? Berikut ringkasannya:
+                </p>
+              </div>
+
               {/* Summary Stats Cards */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-4 shadow-md backdrop-blur-sm relative overflow-hidden group">
@@ -1337,6 +1531,37 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Backup & Restore Data Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 p-5 rounded-2xl shadow-lg space-y-4">
+                <h3 className="text-xs text-neutral-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span>💾</span> Cadangkan & Pulihkan Data POS
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Amankan seluruh data transaksi, katalog produk, bahan baku, utang, dan kalkulator HPP Anda. File cadangan dapat diunduh dan dipulihkan kembali sewaktu-waktu di perangkat ini atau perangkat lainnya secara offline.
+                </p>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={handleExportBackup}
+                    className="flex-1 text-center text-xs bg-violet-600 hover:bg-violet-500 text-white font-bold py-2.5 rounded-xl transition cursor-pointer"
+                  >
+                    📥 Unduh Backup JSON
+                  </button>
+                  <button 
+                    onClick={triggerImportBackup}
+                    className="flex-1 text-center text-xs bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-bold py-2.5 rounded-xl border border-neutral-700 transition cursor-pointer"
+                  >
+                    📤 Pulihkan Data (Import)
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={backupFileInputRef} 
+                    accept=".json" 
+                    onChange={handleImportBackup} 
+                    className="hidden" 
+                  />
+                </div>
+              </div>
+
               {/* Profit & Loss statement */}
               <div className="bg-neutral-900/50 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-base font-bold text-white border-b border-neutral-800 pb-2 flex items-center gap-2">
@@ -1371,6 +1596,11 @@ export default function App() {
                 </p>
               </div>
             </div>
+          )}
+
+          {/* TAB 6: HPP CALCULATOR */}
+          {activeTab === 'hpp' && (
+            <HppCalculator currentUser={currentUser} onProductAdded={refreshData} />
           )}
 
         </div>
