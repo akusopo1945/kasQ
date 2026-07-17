@@ -1,16 +1,18 @@
-# React + Vite
+# KasQ - Hybrid Offline-First POS
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+KasQ adalah aplikasi kasir (Point of Sale) dan pembukuan keuangan UMKM berbasis web/mobile yang tangguh, mengadopsi prinsip **Offline-First**. Seluruh UI, database lokal, dan mesin parsing perintah suara berjalan lokal di HP/browser secara offline, dengan sinkronisasi awan secara realtime saat internet terhubung.
 
-Currently, two official plugins are available:
+## Fitur Utama
+* **Offline-First Database**: Kecepatan respons query < 200ms menggunakan [db.service.js](file:///var/www/html/kasQ/src/services/db.service.js) (IndexedDB via Dexie.js).
+* **Hybrid AI Voice Input**: Input transaksi via suara. Memakai Google Gemini API saat online, dan parser lokal regex saat offline.
+* **Realtime Cloud Sync**: Replikasi data otomatis ke Firebase Firestore dan Google Sheets saat terdeteksi koneksi internet.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Panduan Arsitektur & Sinkronisasi
+Alur kerja sinkronisasi data realtime (IndexedDB ↔ Firestore ↔ Google Sheets) didokumentasikan secara lengkap pada berkas panduan:
+* **[SYNC_GUIDE.md](file:///var/www/html/kasQ/SYNC_GUIDE.md)**
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Cara Menjalankan Project
+1. Instal dependensi: `npm install`
+2. Konfigurasi file `.env` untuk API Key Firebase dan URL Apps Script Google Sheets.
+3. Jalankan server lokal: `npm run dev`
+4. Bangun versi produksi: `npm run build`

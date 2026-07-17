@@ -4,7 +4,7 @@ import {
   LogOut, Plus, Search, Trash2, Edit3, AlertTriangle, 
   TrendingUp, TrendingDown, Download, Eye, EyeOff, Save, 
   CheckCircle, XCircle, RefreshCw, BarChart2, Calculator,
-  Settings, User
+  Settings, User, Printer, Bluetooth
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import XLSX from 'xlsx-js-style';
@@ -13,9 +13,14 @@ import html2canvas from 'html2canvas';
 import HeaderStatus from './components/HeaderStatus';
 import VoiceButton from './components/VoiceButton';
 import HppCalculator from './components/HppCalculator';
-import { Camera, CameraResultType } from '@capacitor/camera';
 import { db, seedUserProducts, seedTestUser } from './services/db.service';
-import { parseCommand, parseImageCommand } from './services/ai.service';
+import { 
+  syncLocalToCloud, 
+  subscribeToCloudChanges, 
+  unsubscribeFromCloudChanges 
+} from './services/firebase.service';
+import { parseCommand } from './services/ai.service';
+import { printerService } from './services/printer.service';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 export default function App() {
@@ -40,6 +45,32 @@ export default function App() {
 
   // Active Tab / Page Navigation
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | catalog | materials | debts | reports
+  const [showSyncGuide, setShowSyncGuide] = useState(false);
+
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA Install Outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setIsInstallable(false);
+  };
 
   // Data States
   const [products, setProducts] = useState([]);
@@ -88,6 +119,12 @@ export default function App() {
   const catalogFileInputRef = React.useRef(null);
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Printer States
+  const [printerSettings, setPrinterSettings] = useState(() => printerService.getSettings());
+  const [btDeviceName, setBtDeviceName] = useState(printerService.getConnectedDeviceName());
+  const [isBtConnected, setIsBtConnected] = useState(printerService.isBluetoothConnected());
+  const [isSearchingBt, setIsSearchingBt] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -215,6 +252,13 @@ export default function App() {
     if (!currentUser) return;
     try {
       const uId = currentUser.id;
+      const freshUser = await db.users.get(uId);
+      if (freshUser) {
+        // Sync user state changes with Dexie database updates
+        if (freshUser.name !== currentUser.name || freshUser.business !== currentUser.business || freshUser.password !== currentUser.password) {
+          setCurrentUser(freshUser);
+        }
+      }
       const allProducts = await db.products.where('userId').equals(uId).toArray();
       const allTransactions = await db.transactions.where('userId').equals(uId).toArray();
       const allDebts = await db.debts.where('userId').equals(uId).toArray();
@@ -227,7 +271,22 @@ export default function App() {
       setMaterials(allMaterials);
 
       const unsyncedTxns = allTransactions.filter(t => t.status_sync === 0);
-      setUnsyncedCount(unsyncedTxns.length);
+      const unsyncedProds = allProducts.filter(p => p.status_sync === 0);
+      const unsyncedDebts = allDebts.filter(d => d.status_sync === 0);
+      const unsyncedMats = allMaterials.filter(m => m.status_sync === 0);
+      const unsyncedTombstones = await db.tombstones
+        .where('userId')
+        .equals(uId)
+        .and(t => t.status_sync === 0)
+        .toArray();
+
+      setUnsyncedCount(
+        unsyncedTxns.length +
+        unsyncedProds.length +
+        unsyncedDebts.length +
+        unsyncedMats.length +
+        unsyncedTombstones.length
+      );
     } catch (err) {
       console.error('Failed to load data:', err);
     }
@@ -238,8 +297,41 @@ export default function App() {
       setProfileName(currentUser.name);
       setProfileBusiness(currentUser.business);
       setProfilePhone(currentUser.phone);
-      handlePullSyncData(currentUser);
+      
+      // Subscribe to real-time Firestore sync
+      subscribeToCloudChanges(currentUser.id, refreshData);
+      
+      // Auto push any unsynced offline data
+      syncLocalToCloud(currentUser.id).then(() => refreshData());
+    } else {
+      unsubscribeFromCloudChanges();
     }
+    return () => {
+      unsubscribeFromCloudChanges();
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const handleDisconnect = () => {
+      setBtDeviceName(null);
+      setIsBtConnected(false);
+    };
+    window.addEventListener('printer-disconnected', handleDisconnect);
+    return () => {
+      window.removeEventListener('printer-disconnected', handleDisconnect);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      if (currentUser) {
+        syncLocalToCloud(currentUser.id).then(() => refreshData());
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -259,14 +351,24 @@ export default function App() {
             }
           }
 
-          // 2. Request Mic & Camera Permission
+          // 1.5 Request Storage Persistence to prevent OS auto-clearing IndexedDB
+          if (navigator.storage && navigator.storage.persist) {
+            try {
+              const isPersisted = await navigator.storage.persist();
+              console.log(`PWA Penyimpanan Persisten: ${isPersisted ? 'Aktif' : 'Tidak Aktif'}`);
+            } catch (e) {
+              console.warn('Gagal meminta penyimpanan persisten:', e);
+            }
+          }
+
+          // 2. Request Mic Permission
           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             try {
-              const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
               stream.getTracks().forEach(track => track.stop());
-              console.log('Izin Kamera & Mikrofon berhasil diberikan');
+              console.log('Izin Mikrofon berhasil diberikan');
             } catch (err) {
-              console.warn('Izin Kamera/Mikrofon ditolak atau tidak didukung:', err);
+              console.warn('Izin Mikrofon ditolak atau tidak didukung:', err);
             }
           }
         }, 1000);
@@ -286,65 +388,7 @@ export default function App() {
     localStorage.setItem('kasq_gemini_api_key', key);
   };
 
-  // --- AI PHOTO CHECKOUT / CAMERA PROCESSING ---
-  const handleTakePhoto = async () => {
-    setIsProcessing(true);
-    setErrorMsg('');
-    setSuccessMsg('');
-    setParsedPreview(null);
 
-    try {
-      let base64Data = '';
-
-      if (Capacitor.isNativePlatform()) {
-        const image = await Camera.getPhoto({
-          quality: 90,
-          allowEditing: false,
-          resultType: CameraResultType.Base64
-        });
-        base64Data = image.base64String;
-      } else {
-        // Web fallback: open file dialog
-        base64Data = await new Promise((resolve, reject) => {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = 'image/*';
-          input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) {
-              reject(new Error('Tidak ada file dipilih'));
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = reader.result.split(',')[1];
-              resolve(base64);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          };
-          input.click();
-        });
-      }
-
-      if (!base64Data) {
-        throw new Error('Gagal mengambil gambar');
-      }
-
-      const parsed = await parseImageCommand(base64Data, apiKey, products);
-      if (parsed.action === 'SALE' && parsed.items && parsed.items.length > 0) {
-        setParsedPreview(parsed);
-        setSuccessMsg(`Foto berhasil dianalisis! Ditemukan ${parsed.items.length} item.`);
-      } else {
-        throw new Error('Tidak ada item yang dapat diidentifikasi dari foto. Pastikan pencahayaan cukup.');
-      }
-    } catch (err) {
-      console.error('Camera/Gemini Error:', err);
-      setErrorMsg(err.message || 'Gagal memproses foto pesanan');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   // --- AI VOICE HUB / TEXT COMMAND PROCESSING ---
   const processCommandText = async (text) => {
@@ -554,98 +598,9 @@ export default function App() {
 
   // --- THERMAL RECEIPT PRINTING ---
   const printThermalReceipt = (transaction, businessName, userName) => {
-    const printWindow = window.open('', '_blank', 'width=300,height=600');
-    if (!printWindow) {
-      alert('Harap izinkan popup browser untuk mencetak struk.');
-      return;
-    }
-
-    const itemsHtml = transaction.items.map(item => `
-      <tr>
-        <td style="padding: 3px 0;">${item.name} x${item.qty}</td>
-        <td style="text-align: right; padding: 3px 0;">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
-      </tr>
-    `).join('');
-
-    const dateStr = new Date(transaction.date).toLocaleString('id-ID');
-    const paymentMethodName = {
-      'CASH': 'Tunai',
-      'QRIS': 'QRIS / E-Wallet',
-      'BANK_TRANSFER': 'Transfer Bank'
-    }[transaction.paymentMethod] || 'Tunai';
-
-    const html = `
-      <html>
-        <head>
-          <title>Struk KasQ</title>
-          <style>
-            @page { size: 58mm auto; margin: 0; }
-            body {
-              font-family: 'Courier New', Courier, monospace;
-              font-size: 11px;
-              color: #000;
-              margin: 0;
-              padding: 8px;
-              width: 58mm;
-              box-sizing: border-box;
-            }
-            .text-center { text-align: center; }
-            .bold { font-weight: bold; }
-            .divider { border-top: 1px dashed #000; margin: 6px 0; }
-            table { width: 100%; border-collapse: collapse; }
-          </style>
-        </head>
-        <body>
-          <div class="text-center">
-            <div class="bold" style="font-size: 13px;">${businessName.toUpperCase()}</div>
-            <div style="font-size: 9px;">Kasir: ${userName}</div>
-            <div style="font-size: 9px;">${dateStr}</div>
-            ${transaction.customerName ? `<div style="font-size: 9px; font-weight: bold; margin-top: 2px;">Pemesan: ${transaction.customerName}</div>` : ''}
-          </div>
-          <div class="divider"></div>
-          <table>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-          <div class="divider"></div>
-          <table>
-            <tr>
-              <td class="bold">TOTAL</td>
-              <td class="bold" style="text-align: right;">Rp ${transaction.total.toLocaleString('id-ID')}</td>
-            </tr>
-            <tr>
-              <td>Metode</td>
-              <td style="text-align: right;">${paymentMethodName}</td>
-            </tr>
-            ${transaction.cashReceived ? `
-            <tr>
-              <td>Bayar</td>
-              <td style="text-align: right;">Rp ${transaction.cashReceived.toLocaleString('id-ID')}</td>
-            </tr>
-            <tr>
-              <td>Kembali</td>
-              <td style="text-align: right;">Rp ${transaction.cashChange.toLocaleString('id-ID')}</td>
-            </tr>
-            ` : ''}
-          </table>
-          <div class="divider"></div>
-          <div class="text-center" style="font-size: 8px; margin-top: 8px;">
-            Terima Kasih!<br>Powered by KasQ
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printerService.printReceipt(transaction, businessName, userName).catch(err => {
+      setErrorMsg(err.message || 'Gagal mencetak struk');
+    });
   };
 
   // --- CHECKOUT & BILL SUSPENSION HANDLERS ---
@@ -756,7 +711,7 @@ export default function App() {
 
       await db.transactions.add(txnData);
 
-      if (printReceipt) {
+      if (printReceipt || printerSettings.autoPrint) {
         printThermalReceipt(txnData, currentUser.business, currentUser.name);
       }
 
@@ -782,12 +737,14 @@ export default function App() {
     setErrorMsg('');
     setSuccessMsg('');
     try {
+      const nowStr = new Date().toISOString();
       await db.users.update(currentUser.id, {
         name: profileName,
         business: profileBusiness,
-        phone: profilePhone
+        phone: profilePhone,
+        updatedAt: nowStr
       });
-      const updatedUser = { ...currentUser, name: profileName, business: profileBusiness, phone: profilePhone };
+      const updatedUser = { ...currentUser, name: profileName, business: profileBusiness, phone: profilePhone, updatedAt: nowStr };
       setCurrentUser(updatedUser);
       if (localStorage.getItem('kasq_session')) {
         localStorage.setItem('kasq_session', JSON.stringify(updatedUser));
@@ -798,6 +755,57 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setErrorMsg('Gagal memperbarui profil. No. HP mungkin sudah terdaftar.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- PRINTER OPERATIONS ---
+  const handleConnectBt = async () => {
+    setIsSearchingBt(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const name = await printerService.connectBluetooth();
+      setBtDeviceName(name);
+      setIsBtConnected(true);
+      setSuccessMsg(`Printer Bluetooth "${name}" berhasil terhubung!`);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.message || 'Gagal menyambungkan Printer Bluetooth.');
+    } finally {
+      setIsSearchingBt(false);
+    }
+  };
+
+  const handleDisconnectBt = async () => {
+    try {
+      await printerService.disconnectBluetooth();
+      setBtDeviceName(null);
+      setIsBtConnected(false);
+      setSuccessMsg('Printer Bluetooth terputus.');
+    } catch (err) {
+      setErrorMsg('Gagal memutuskan koneksi printer.');
+    }
+  };
+
+  const handleUpdatePrinterSetting = (key, value) => {
+    const updated = { ...printerSettings, [key]: value };
+    setPrinterSettings(updated);
+    printerService.saveSettings(updated);
+  };
+
+  const handleTestPrint = async () => {
+    if (!currentUser) return;
+    setIsProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await printerService.printTestPage(currentUser.business, currentUser.name);
+      setSuccessMsg('Test print berhasil dikirim!');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.message || 'Gagal melakukan test print.');
     } finally {
       setIsProcessing(false);
     }
@@ -990,41 +998,8 @@ export default function App() {
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      const uId = currentUser.id;
-      // Gather all local data for this user
-      const productsList = await db.products.where('userId').equals(uId).toArray();
-      const transactionsList = await db.transactions.where('userId').equals(uId).toArray();
-      const debtsList = await db.debts.where('userId').equals(uId).toArray();
-      const materialsList = await db.materials.where('userId').equals(uId).toArray();
-
-      const syncPayload = {
-        timestamp: new Date().toISOString(),
-        phone: currentUser.phone,
-        products: productsList,
-        transactions: transactionsList,
-        debts: debtsList,
-        materials: materialsList
-      };
-
-      // Upload to kvdb.io
-      const url = `https://kvdb.io/AqyKasQSettleStore123/kasq_sync_${currentUser.phone}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(syncPayload)
-      });
-
-      if (!response.ok) {
-        throw new Error('Gagal mengirim data ke server Cloud.');
-      }
-
-      // Mark local transactions as synced
-      const unsynced = await db.transactions.where('userId').equals(uId).and(t => t.status_sync === 0).toArray();
-      for (const t of unsynced) {
-        await db.transactions.update(t.id, { status_sync: 1 });
-      }
-
-      setSuccessMsg('Sinkronisasi cloud berhasil! Seluruh data Anda disimpan aman di Cloud.');
+      await syncLocalToCloud(currentUser.id);
+      setSuccessMsg('Sinkronisasi Firestore Cloud berhasil! Seluruh data Anda disimpan aman.');
       await refreshData();
     } catch (err) {
       console.error(err);
@@ -1034,65 +1009,13 @@ export default function App() {
     }
   };
 
-  const handlePullSyncData = async (targetUser) => {
-    if (!navigator.onLine || !targetUser) return;
+  const handlePullSyncData = async () => {
+    if (!navigator.onLine || !currentUser) return;
     try {
-      const url = `https://kvdb.io/AqyKasQSettleStore123/kasq_sync_${targetUser.phone}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        // No backup found or server error
-        return;
-      }
-      const data = await response.json();
-      if (!data || !data.products) return;
-
-      // Check if local database is empty
-      const localProducts = await db.products.where('userId').equals(targetUser.id).toArray();
-      const localTxns = await db.transactions.where('userId').equals(targetUser.id).toArray();
-
-      const restoreData = async () => {
-        // Clear local tables for this user
-        await db.products.where('userId').equals(targetUser.id).delete();
-        await db.transactions.where('userId').equals(targetUser.id).delete();
-        await db.debts.where('userId').equals(targetUser.id).delete();
-        await db.materials.where('userId').equals(targetUser.id).delete();
-
-        // Restore products
-        for (const p of data.products) {
-          const { id, ...rest } = p;
-          await db.products.add({ ...rest, userId: targetUser.id });
-        }
-        // Restore transactions (force status_sync to 1)
-        for (const t of data.transactions) {
-          const { id, ...rest } = t;
-          await db.transactions.add({ ...rest, status_sync: 1, userId: targetUser.id });
-        }
-        // Restore debts
-        for (const d of data.debts) {
-          const { id, ...rest } = d;
-          await db.debts.add({ ...rest, userId: targetUser.id });
-        }
-        // Restore materials
-        for (const m of data.materials) {
-          const { id, ...rest } = m;
-          await db.materials.add({ ...rest, userId: targetUser.id });
-        }
-
-        setSuccessMsg('Data berhasil disinkronkan & diunduh dari Cloud!');
-        await refreshData();
-      };
-
-      if (localProducts.length === 0 && localTxns.length === 0) {
-        // Auto restore if empty (Incognito/new session)
-        await restoreData();
-      } else {
-        // Ask confirmation
-        if (confirm(`Ditemukan data cadangan di Cloud tanggal ${new Date(data.timestamp).toLocaleString('id-ID')}.\n\nApakah Anda ingin mengunduh dan menimpa data lokal saat ini dengan data Cloud?`)) {
-          await restoreData();
-        }
-      }
+      await syncLocalToCloud(currentUser.id);
+      await refreshData();
     } catch (err) {
-      console.error('Failed to pull sync data:', err);
+      console.error('Failed to sync data:', err);
     }
   };
 
@@ -1503,6 +1426,84 @@ export default function App() {
     doc.save(`Laporan_KasQ_${currentUser.business.replace(/\s+/g, '_')}.pdf`);
   };
 
+  const exportHistoryReport = (format = 'pdf') => {
+    if (!currentUser) return;
+    const filteredTxns = getFilteredHistory();
+    const titleRange = historyFilterType === 'TODAY' 
+      ? 'HARI INI (HARIAN)' 
+      : historyFilterType === 'WEEK' 
+        ? '7 HARI TERAKHIR (MINGGUAN)' 
+        : `RENTANG ${historyStartDate} S/D ${historyEndDate}`;
+    
+    if (format === 'pdf') {
+      const doc = new jsPDF();
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text(`LAPORAN PENJUALAN - ${currentUser.business.toUpperCase()}`, 14, 20);
+      doc.setFontSize(10);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(`Periode: ${titleRange} | Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 26);
+      doc.text(`Pemilik: ${currentUser.name} | Total Transaksi: ${filteredTxns.length}`, 14, 31);
+      doc.line(14, 34, 196, 34);
+
+      let y = 42;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('No. Invoice', 14, y);
+      doc.text('Tanggal & Waktu', 42, y);
+      doc.text('Pelanggan', 90, y);
+      doc.text('Metode', 125, y);
+      doc.text('Total (Rp)', 160, y);
+      y += 4;
+      doc.line(14, y, 196, y);
+      y += 6;
+
+      doc.setFont('Helvetica', 'normal');
+      let totalAmount = 0;
+      filteredTxns.forEach((t) => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        const invNum = `INV-${new Date(t.date).getTime().toString().slice(-6)}`;
+        const dateStr = new Date(t.date).toLocaleString('id-ID');
+        const custName = t.customerName || '-';
+        const methodStr = t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer';
+        
+        doc.text(invNum, 14, y);
+        doc.text(dateStr, 42, y);
+        doc.text(custName.slice(0, 15), 90, y);
+        doc.text(methodStr, 125, y);
+        doc.text(t.total.toLocaleString('id-ID'), 160, y);
+        totalAmount += t.total;
+        y += 6;
+      });
+
+      y += 4;
+      doc.line(14, y, 196, y);
+      y += 6;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('TOTAL OMSET PENJUALAN', 14, y);
+      doc.text(`Rp ${totalAmount.toLocaleString('id-ID')}`, 160, y);
+
+      doc.save(`Laporan_Penjualan_KasQ_${titleRange.replace(/\s+/g, '_')}.pdf`);
+    } else {
+      const data = filteredTxns.map((t, idx) => ({
+        'No': idx + 1,
+        'No. Invoice': `INV-${new Date(t.date).getTime().toString().slice(-6)}`,
+        'Tanggal': new Date(t.date).toLocaleString('id-ID'),
+        'Pelanggan': t.customerName || '-',
+        'Item Belanja': t.items.map(i => `${i.name} (x${i.qty})`).join(', '),
+        'Metode': t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer',
+        'Total (Rp)': t.total
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Penjualan');
+      XLSX.writeFile(wb, `Laporan_Penjualan_KasQ_${titleRange.replace(/\s+/g, '_')}.xlsx`);
+    }
+  };
+
   const exportExcel = () => {
     if (!currentUser) return;
     const reportData = transactions.map(t => ({
@@ -1732,19 +1733,7 @@ export default function App() {
 
       </div>
 
-      {/* Alert/Status Toast */}
-      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4">
-        {errorMsg && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-4 py-3 rounded-xl flex items-center gap-2">
-            <span>⚠️</span> {errorMsg}
-          </div>
-        )}
-        {successMsg && (
-          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs px-4 py-3 rounded-xl flex items-center gap-2">
-            <span>✅</span> {successMsg}
-          </div>
-        )}
-      </div>
+
 
       {/* Main Grid Content */}
       <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -2185,6 +2174,26 @@ export default function App() {
           {/* TAB 7: SETTINGS & PROFILE (PENGATURAN & PROFIL) */}
           {activeTab === 'settings' && (
             <div className="space-y-6 animate-fade-in">
+              {/* PWA Installation Card */}
+              {isInstallable && (
+                <div className="bg-neutral-900 border border-violet-850/60 rounded-2xl p-6 shadow-lg space-y-4 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-violet-600 to-indigo-600" />
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>📲</span> Install Aplikasi KasQ POS
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed">
+                    Instal KasQ POS di HP Android atau komputer Anda agar dapat berjalan dalam jendela khusus, akses cepat dari homescreen, dan performa luring yang dioptimalkan penuh.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleInstallPwa}
+                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer active:scale-98 text-center flex items-center justify-center gap-2"
+                  >
+                    <span>Download & Instal Sekarang</span>
+                  </button>
+                </div>
+              )}
+
               {/* Profile Details Form */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2397,6 +2406,141 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Printer & Receipt Settings Panel */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Printer size={18} className="text-violet-400" /> Pengaturan Printer & Struk
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Konfigurasikan printer kasir Anda untuk mencetak struk belanja secara otomatis atau manual. Mendukung printer thermal standar (Bluetooth/ESC-POS) dan printer sistem bawaan.
+                </p>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Metode Koneksi</label>
+                      <select
+                        value={printerSettings.connectionType}
+                        onChange={(e) => handleUpdatePrinterSetting('connectionType', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="system">Printer Sistem Bawaan (Aplikasi / PDF / WiFi)</option>
+                        <option value="bluetooth">Printer Thermal Bluetooth (ESC/POS)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Lebar Kertas</label>
+                      <select
+                        value={printerSettings.paperSize}
+                        onChange={(e) => handleUpdatePrinterSetting('paperSize', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="58mm">58 mm (32 karakter)</option>
+                        <option value="80mm">80 mm (48 karakter)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Teks Tambahan Header (Alamat/Kontak)</label>
+                      <textarea
+                        rows={2}
+                        value={printerSettings.headerText}
+                        onChange={(e) => handleUpdatePrinterSetting('headerText', e.target.value)}
+                        placeholder="Contoh: Jl. Diponegoro No. 45&#10;Telp: 0812345678"
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Teks Penutup / Footer Struk</label>
+                      <textarea
+                        rows={2}
+                        value={printerSettings.footerText}
+                        onChange={(e) => handleUpdatePrinterSetting('footerText', e.target.value)}
+                        placeholder="Contoh: Terima Kasih!&#10;Selamat berbelanja kembali."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-neutral-950 border border-neutral-850 p-4 rounded-xl">
+                    <div>
+                      <span className="text-xs font-bold text-neutral-200 block">Cetak Otomatis</span>
+                      <span className="text-[10px] text-neutral-500 block leading-normal font-medium">Cetak struk secara otomatis setiap selesai pembayaran.</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={printerSettings.autoPrint}
+                        onChange={(e) => handleUpdatePrinterSetting('autoPrint', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-600 peer-checked:after:bg-white"></div>
+                    </label>
+                  </div>
+
+                  {printerSettings.connectionType === 'bluetooth' && (
+                    <div className="bg-neutral-950 border border-neutral-850 p-4 rounded-xl space-y-3.5 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bluetooth size={16} className={isBtConnected ? "text-violet-400 animate-pulse" : "text-neutral-500"} />
+                          <div>
+                            <span className="text-xs font-bold text-neutral-200 block">Status Koneksi Bluetooth</span>
+                            {isBtConnected ? (
+                              <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                ● Terhubung: {btDeviceName}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-neutral-500 block leading-normal">Belum ada printer terhubung.</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isBtConnected ? (
+                            <button
+                              type="button"
+                              onClick={handleDisconnectBt}
+                              className="bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 text-[10px] font-bold px-3.5 py-2 rounded-lg border border-red-500/20 transition cursor-pointer"
+                            >
+                              Putuskan
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isSearchingBt}
+                              onClick={handleConnectBt}
+                              className="bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold px-3.5 py-2 rounded-lg shadow-md transition cursor-pointer disabled:bg-neutral-850 disabled:text-neutral-550 flex items-center gap-1.5"
+                            >
+                              {isSearchingBt ? (
+                                <>
+                                  <RefreshCw size={10} className="animate-spin" />
+                                  <span>Mencari...</span>
+                                </>
+                              ) : (
+                                <span>Hubungkan</span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      disabled={isProcessing || (printerSettings.connectionType === 'bluetooth' && !isBtConnected)}
+                      onClick={handleTestPrint}
+                      className="bg-neutral-950 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <span>🖨️</span>
+                      <span>Uji Coba Cetak (Test Print)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Product Catalog Import Card */}
               <div className="bg-neutral-900 border border-neutral-800/80 p-6 rounded-2xl shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -2444,7 +2588,14 @@ export default function App() {
                   </div>
                 </div>
                 <p className="text-[11px] text-neutral-500 leading-relaxed">
-                  Unggah data transaksi offline lokal Anda ke server cloud KasQ ketika Anda terhubung ke internet untuk mencegah kehilangan data.
+                  Unggah data transaksi offline lokal Anda ke server cloud KasQ ketika Anda terhubung ke internet untuk mencegah kehilangan data.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowSyncGuide(true)}
+                    className="text-violet-400 hover:text-violet-300 underline font-bold cursor-pointer inline-block ml-1"
+                  >
+                    Pelajari Alur Sinkronisasi ➔
+                  </button>
                 </p>
 
                 <div className="space-y-3.5">
@@ -2551,13 +2702,29 @@ export default function App() {
 
               {/* Transactions List */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
-                <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-3 gap-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <span>🧾</span> Daftar Struk Penjualan
                   </h3>
-                  <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                    {getFilteredHistory().length} Transaksi
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportHistoryReport('pdf')}
+                      className="bg-neutral-950 border border-neutral-850 hover:border-violet-600 hover:text-violet-400 text-neutral-400 text-[10px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Download size={10} /> PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportHistoryReport('xlsx')}
+                      className="bg-neutral-950 border border-neutral-850 hover:border-emerald-600 hover:text-emerald-400 text-neutral-400 text-[10px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Download size={10} /> Excel
+                    </button>
+                    <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">
+                      {getFilteredHistory().length} Transaksi
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
@@ -2631,10 +2798,10 @@ export default function App() {
             <div className="absolute top-0 left-0 w-full h-[4px] bg-gradient-to-r from-violet-600 to-indigo-600" />
             <h2 className="text-base sm:text-lg font-bold text-white mb-1">KasQ AI Smart Assistant</h2>
             <p className="text-[10px] text-neutral-500 mb-2 max-w-xs">
-              Gunakan suara untuk transaksi, atau ambil foto kertas pesanan / menu makanan
+              Gunakan suara atau ketik perintah langsung untuk transaksi cepat
             </p>
 
-            <div className="flex items-center justify-center gap-8 w-full">
+            <div className="flex items-center justify-center w-full py-4 select-none">
               {/* Voice Button */}
               <VoiceButton 
                 onResult={(text) => {
@@ -2643,34 +2810,6 @@ export default function App() {
                 }}
                 onError={(err) => setErrorMsg(err)}
               />
-
-              {/* Camera Button */}
-              <div className="flex flex-col items-center justify-center gap-3 py-6 select-none">
-                <button
-                  onClick={handleTakePhoto}
-                  disabled={isProcessing}
-                  className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl cursor-pointer ${
-                    isProcessing
-                      ? 'bg-neutral-850 scale-95 opacity-50'
-                      : 'bg-gradient-to-tr from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-violet-950/40'
-                  }`}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-8 h-8 text-white z-10"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-                  </svg>
-                </button>
-                <span className="text-xs font-semibold tracking-wide text-neutral-400">
-                  Ambil Foto Order
-                </span>
-              </div>
             </div>
 
             {/* Text Input Fallback */}
@@ -3372,7 +3511,7 @@ export default function App() {
               {activeCaptureTxn.items.map((item, idx) => (
                 <tr key={idx}>
                   <td style={{ padding: '2px 0' }}>{item.name} x{item.qty}</td>
-                  <td style={{ textAlign: 'right', padding: '2px 0' }}>Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
+                  <td style={{ textAlign: 'right', padding: '2px 0' }}>Rp {(item.price * item.qty).toLocaleString('id-ID')}</td>
                 </tr>
               ))}
             </tbody>
@@ -3441,6 +3580,153 @@ export default function App() {
               className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold px-6 py-2.5 rounded-xl shadow transition cursor-pointer"
             >
               Tutup QRIS
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Panduan Sinkronisasi */}
+      {showSyncGuide && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                🔄 Alur Sinkronisasi Realtime KasQ
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowSyncGuide(false)} 
+                className="text-neutral-400 hover:text-white font-bold text-base cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-xs text-neutral-300 leading-relaxed">
+              <div className="bg-neutral-950 border border-neutral-850 p-4 rounded-2xl flex flex-col gap-2.5 text-[10px]">
+                <div className="flex items-center gap-2 text-violet-400 font-bold uppercase tracking-wider">
+                  <span>📱</span> Penyimpanan Lokal (HP/Browser)
+                </div>
+                <p>Setiap input tersimpan instan ke <strong>IndexedDB (Dexie.js)</strong> secara offline dalam waktu &lt; 200ms.</p>
+                
+                <div className="text-center text-neutral-600 py-0.5 border-t border-b border-neutral-850 my-1 font-bold">
+                  ⬇️ Sync Otomatis Saat Online
+                </div>
+                
+                <div className="flex items-center gap-2 text-indigo-400 font-bold uppercase tracking-wider">
+                  <span>☁️</span> Cloud (Firestore + Google Sheets)
+                </div>
+                <p>Saat internet aktif, data ter-push otomatis ke <strong>Google Firestore</strong> dan <strong>Google Sheets</strong> secara realtime.</p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Resolusi Konflik (Last-Write-Wins):</h4>
+                <p>Menggunakan timestamp `updatedAt`. Jika data diubah secara bersamaan di perangkat berbeda saat offline, perubahan terbaru (berdasarkan penanda waktu terakhir) yang dipertahankan.</p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Google Sheets Integration:</h4>
+                <p>Aplikasi ini memanggil <strong>Google Apps Script Web App</strong> secara langsung dari client saat online. Menjamin update baris (tambah/edit/hapus) di Spreadsheet Anda berlangsung aman dan instan tanpa server tambahan.</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-neutral-800">
+              <button 
+                type="button" 
+                onClick={() => setShowSyncGuide(false)} 
+                className="bg-neutral-800 hover:bg-neutral-750 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer"
+              >
+                Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUCCESS MODAL POPUP */}
+      {successMsg && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl scale-up animate-scale-up">
+            {/* Animated Icon Header based on content */}
+            <div className="flex justify-center">
+              {successMsg.toLowerCase().includes('sync') || successMsg.toLowerCase().includes('sinkronisasi') ? (
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 animate-pulse shadow-lg shadow-emerald-950/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                  </svg>
+                </div>
+              ) : successMsg.toLowerCase().includes('suara') || successMsg.toLowerCase().includes('ditemukan') || successMsg.toLowerCase().includes('analisis') || successMsg.toLowerCase().includes('ditambah') ? (
+                <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-400 animate-pulse shadow-lg shadow-violet-950/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                  </svg>
+                </div>
+              ) : (
+                // Default Checkmark success for Checkout/Penjualan
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-8 h-8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            {/* Title & Message */}
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-white tracking-tight">
+                {successMsg.toLowerCase().includes('sync') || successMsg.toLowerCase().includes('sinkronisasi')
+                  ? 'Sinkronisasi Sukses'
+                  : successMsg.toLowerCase().includes('suara') || successMsg.toLowerCase().includes('ditemukan') || successMsg.toLowerCase().includes('analisis') || successMsg.toLowerCase().includes('ditambah')
+                  ? 'Perintah Suara AI'
+                  : 'Transaksi Berhasil'}
+              </h3>
+              <p className="text-xs text-neutral-400 font-medium leading-relaxed px-1">
+                {successMsg}
+              </p>
+            </div>
+
+            {/* Confirm Button */}
+            <button
+              type="button"
+              onClick={() => setSuccessMsg('')}
+              className="w-full py-2.5 bg-violet-600 hover:bg-violet-750 text-white text-xs font-extrabold rounded-xl transition cursor-pointer shadow-lg shadow-violet-900/25"
+            >
+              Mantap
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ERROR MODAL POPUP */}
+      {errorMsg && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl scale-up animate-scale-up">
+            {/* Animated Icon Header */}
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/25 flex items-center justify-center text-red-400 animate-bounce shadow-lg shadow-red-950/20">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 7.5h.008v.008H12v-.008Z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Title & Message */}
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-white tracking-tight">
+                Terjadi Kesalahan
+              </h3>
+              <p className="text-xs text-neutral-400 font-medium leading-relaxed px-1">
+                {errorMsg}
+              </p>
+            </div>
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setErrorMsg('')}
+              className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold rounded-xl transition cursor-pointer shadow-lg shadow-red-900/25"
+            >
+              Tutup
             </button>
           </div>
         </div>

@@ -16,6 +16,7 @@
     "@capacitor/core": "^8.4.2",
     "@google/genai": "^2.11.0",
     "dexie": "^4.4.4",
+    "firebase": "^12.16.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",

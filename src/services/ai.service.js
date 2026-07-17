@@ -10,9 +10,119 @@ const INDO_NUMBERS = {
   'lima puluh': 50
 };
 
+// Convert word numbers (e.g. "dua puluh") to digits
+function convertWordNumbersToDigits(text) {
+  let result = text.toLowerCase();
+  
+  // Replace compound word numbers first
+  const compoundNumbers = {
+    'dua puluh': '20', 'tiga puluh': '30', 'empat puluh': '40', 'lima puluh': '50',
+    'sebelas': '11', 'dua belas': '12', 'tiga belas': '13', 'empat belas': '14',
+    'lima belas': '15', 'enam belas': '16', 'tujuh belas': '17', 'delapan belas': '18',
+    'sembilan belas': '19', 'sepuluh': '10'
+  };
+  
+  for (const [word, digit] of Object.entries(compoundNumbers)) {
+    const regex = new RegExp(`\\b${word}\\b`, 'g');
+    result = result.replace(regex, digit);
+  }
+  
+  // Then single digit word numbers
+  const singleNumbers = {
+    'satu': '1', 'dua': '2', 'tiga': '3', 'empat': '4', 'lima': '5',
+    'enam': '6', 'tujuh': '7', 'delapan': '8', 'sembilan': '9', 'se': '1'
+  };
+  
+  for (const [word, digit] of Object.entries(singleNumbers)) {
+    const regex = new RegExp(`\\b${word}\\b`, 'g');
+    result = result.replace(regex, digit);
+  }
+  
+  return result;
+}
+
+// Convert Indonesian currency terms (e.g. "50 ribu") to digits ("50000")
+function parseIndonesianCurrencyText(text) {
+  let cleaned = text.toLowerCase();
+  const multiplierMap = {
+    'juta': 1000000,
+    'ribu': 1000,
+    'ratus': 100
+  };
+  
+  cleaned = convertWordNumbersToDigits(cleaned);
+  
+  let modified = true;
+  while (modified) {
+    modified = false;
+    const match = cleaned.match(/(\d+)\s*(ribu|juta|ratus)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const mult = multiplierMap[match[2]];
+      const val = num * mult;
+      cleaned = cleaned.replace(match[0], val.toString());
+      modified = true;
+    }
+  }
+  
+  cleaned = cleaned.replace(/\bseribu\b/g, '1000');
+  cleaned = cleaned.replace(/\bsejuta\b/g, '1000000');
+  cleaned = cleaned.replace(/\bseratus\b/g, '100');
+  
+  return cleaned;
+}
+
+// Fuzzy match products / materials to handle typos
+function findFuzzyProduct(name, list, threshold = 0.5) {
+  if (list.length === 0) return null;
+  const input = name.toLowerCase().trim();
+  
+  let bestMatch = null;
+  let highestScore = 0;
+  
+  for (const item of list) {
+    const itemName = item.name.toLowerCase().trim();
+    
+    // 1. Exact match
+    if (itemName === input) {
+      return item;
+    }
+    
+    // 2. Contains match
+    if (itemName.includes(input) || input.includes(itemName)) {
+      const score = Math.min(itemName.length, input.length) / Math.max(itemName.length, input.length);
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = item;
+      }
+    }
+    
+    // 3. Word overlap score
+    const inputWords = input.split(/\s+/);
+    const itemWords = itemName.split(/\s+/);
+    let commonWords = 0;
+    for (const w of inputWords) {
+      if (w.length >= 3 && itemWords.includes(w)) {
+        commonWords++;
+      }
+    }
+    const wordScore = commonWords / Math.max(inputWords.length, itemWords.length);
+    if (wordScore > highestScore) {
+      highestScore = wordScore;
+      bestMatch = item;
+    }
+  }
+  
+  if (highestScore >= threshold) {
+    return bestMatch;
+  }
+  return null;
+}
+
 export function parseCompoundLocalSale(text, localProducts = []) {
   if (localProducts.length === 0) return null;
-  const t = text.toLowerCase().trim();
+  const processedText = parseIndonesianCurrencyText(text);
+  const t = processedText.toLowerCase().trim();
 
   // Find all products present in the text
   const matches = [];
@@ -118,7 +228,8 @@ export function parseCompoundLocalSale(text, localProducts = []) {
 
 // Local Offline Parser (Regex & Rules)
 export function parseLocalCommand(text, localProducts = [], localMaterials = []) {
-  const t = text.toLowerCase().trim();
+  const processedText = parseIndonesianCurrencyText(text);
+  const t = processedText.toLowerCase().trim();
 
   // 1. Match Debt: "utang budi 20000" or "piutang asep 15000"
   let debtMatch = t.match(/(?:hutang|utang|piutang|catat utang|catat piutang)\s+([a-zA-Z\s]+?)\s+(\d+)/i);
@@ -145,11 +256,8 @@ export function parseLocalCommand(text, localProducts = [], localMaterials = [])
     const qty = parseInt(materialMatch[2], 10);
     const unit = materialMatch[3] ? materialMatch[3].trim() : 'pcs';
 
-    // Find in local materials
-    const matchedMat = localMaterials.find(m =>
-      m.name.toLowerCase().includes(matName.toLowerCase()) ||
-      matName.toLowerCase().includes(m.name.toLowerCase())
-    );
+    // Fuzzy match in local materials
+    const matchedMat = findFuzzyProduct(matName, localMaterials);
 
     return {
       action: 'MATERIAL',
@@ -175,7 +283,7 @@ export function parseLocalCommand(text, localProducts = [], localMaterials = [])
   }
 
   // 4. Match Compound Local Sale: e.g. "kopi susu satu sama roti bakar dua"
-  const compoundSale = parseCompoundLocalSale(text, localProducts);
+  const compoundSale = parseCompoundLocalSale(processedText, localProducts);
   if (compoundSale) {
     return compoundSale;
   }
@@ -186,10 +294,8 @@ export function parseLocalCommand(text, localProducts = [], localMaterials = [])
     const itemName = saleMatch[1].trim();
     const qty = parseInt(saleMatch[2], 10);
 
-    const matchedProduct = localProducts.find(p =>
-      p.name.toLowerCase().includes(itemName.toLowerCase()) ||
-      itemName.toLowerCase().includes(p.name.toLowerCase())
-    );
+    // Fuzzy match in local products
+    const matchedProduct = findFuzzyProduct(itemName, localProducts);
 
     return {
       action: 'SALE',
@@ -211,16 +317,64 @@ function capitalizeWords(str) {
   return str.replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Wrapper for Browser Native On-Device AI (Gemini Nano via window.ai)
+async function parseWithOnDeviceAI(text, localProducts = [], localMaterials = []) {
+  if (typeof window !== 'undefined' && window.ai && window.ai.languageModel) {
+    try {
+      const capabilities = await window.ai.languageModel.capabilities();
+      if (capabilities.available !== 'no') {
+        const session = await window.ai.languageModel.create({
+          systemPrompt: `Kamu adalah asisten kasir kecerdasan buatan lokal (on-device AI) untuk POS KasQ.
+Tugas: Parse teks perintah kasir menjadi JSON terstruktur.
+Aksi yang didukung:
+- SALE: penjualan barang. Format: { "action": "SALE", "items": [{ "name": "nama_barang", "qty": jumlah, "price": harga }] }
+- EXPENSE: pengeluaran. Format: { "action": "EXPENSE", "amount": jumlah_uang, "notes": "keterangan" }
+- DEBT: utang/piutang. Format: { "action": "DEBT", "customerName": "nama_orang", "amount": jumlah_uang, "type": "UTANG"|"PIUTANG", "notes": "keterangan" }
+- MATERIAL: pembelian bahan baku. Format: { "action": "MATERIAL", "name": "nama_bahan", "qty": jumlah, "unit": "satuan" }
+
+Daftar produk lokal di toko:
+${JSON.stringify(localProducts)}
+
+Daftar bahan baku lokal di toko:
+${JSON.stringify(localMaterials)}
+
+Aturan:
+1. Selalu cocokkan nama barang/bahan dengan daftar lokal di atas jika memungkinkan.
+2. Berikan jawaban HANYA berupa JSON valid tanpa penjelasan apa pun.`
+        });
+        const responseText = await session.prompt(text);
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed && parsed.action) {
+            console.log('Parsed successfully using local Gemini Nano:', parsed);
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal memproses dengan on-device Gemini Nano:', err);
+    }
+  }
+  return null;
+}
+
 // Main AI Service Parser (Hybrid Online-Offline)
 export async function parseCommand(text, apiKey, localProducts = [], localMaterials = []) {
-  // 1. Try local offline parser first for ultimate speed and responsiveness
+  // 1. Try local offline regex & rules parser first (ultra-fast)
   const localResult = parseLocalCommand(text, localProducts, localMaterials);
   if (localResult && localResult.action !== 'UNKNOWN') {
     console.log('Parsed instantly using local regex rules:', localResult);
     return localResult;
   }
 
-  // 2. Fall back to online Gemini if local rules did not match
+  // 2. Try Browser Built-in On-Device AI (Gemini Nano) if available
+  const onDeviceResult = await parseWithOnDeviceAI(text, localProducts, localMaterials);
+  if (onDeviceResult && onDeviceResult.action !== 'UNKNOWN') {
+    return onDeviceResult;
+  }
+
+  // 3. Fall back to online Gemini API if local rules and on-device AI did not match
   const isOnline = navigator.onLine;
 
   if (isOnline && apiKey) {
@@ -365,4 +519,3 @@ Kembalikan format JSON yang valid dan bersesuaian dengan skema.
     throw new Error(error.message || 'Gagal memproses foto pesanan');
   }
 }
-
