@@ -7,6 +7,13 @@ const DEFAULT_SETTINGS = {
   headerText: '',
   footerText: 'Terima Kasih!\nSelamat Berbelanja Kembali',
   autoPrint: false,
+  titleFontSize: 'large', // 'small' | 'medium' | 'large'
+  bodyFontSize: 'normal',  // 'small' | 'normal' | 'large'
+  fontFamily: 'courier',    // 'courier' | 'monospace' | 'sans-serif' | 'serif'
+  dividerChar: '-',         // '-' | '*' | '=' | '.'
+  showLogo: true,           // true | false
+  showCashierName: true,    // true | false
+  uppercaseTitle: true,     // true | false
 };
 
 let activeDevice = null;
@@ -147,12 +154,18 @@ export const printerService = {
       return leftStr + ' '.repeat(spaces) + rightStr;
     };
 
+    const dividerChar = settings.dividerChar || '-';
+    const dividerLine = dividerChar.repeat(maxChars);
+
     // Header
     addCmd(init);
     addCmd(center);
-    addCmd(doubleSize);
+    if (settings.titleFontSize !== 'small') {
+      addCmd(doubleSize);
+    }
     addCmd(boldOn);
-    addText(businessName.toUpperCase());
+    const displayTitle = settings.uppercaseTitle !== false ? businessName.toUpperCase() : businessName;
+    addText(displayTitle);
     addCmd(normalSize);
     addCmd(boldOff);
 
@@ -161,14 +174,16 @@ export const printerService = {
     }
     
     addCmd(center);
-    addText(`Kasir: ${userName}`);
+    if (settings.showCashierName !== false) {
+      addText(`Kasir: ${userName}`);
+    }
     addText(new Date(transaction.date).toLocaleString('id-ID'));
     if (transaction.customerName) {
       addText(`Pemesan: ${transaction.customerName}`);
     }
     
     addCmd(left);
-    addText('-'.repeat(maxChars));
+    addText(dividerLine);
 
     // Items
     transaction.items.forEach(item => {
@@ -180,7 +195,7 @@ export const printerService = {
       addText(formatRow(qtyPrice, totalItem));
     });
 
-    addText('-'.repeat(maxChars));
+    addText(dividerLine);
 
     // Totals
     addCmd(boldOn);
@@ -200,7 +215,7 @@ export const printerService = {
       addText(formatRow('Kembali', `Rp ${transaction.cashChange.toLocaleString('id-ID')}`));
     }
 
-    addText('-'.repeat(maxChars));
+    addText(dividerLine);
 
     // Footer
     if (settings.footerText) {
@@ -208,8 +223,10 @@ export const printerService = {
       addText(settings.footerText);
     }
 
-    addCmd(center);
-    addText('\nPowered by KasQ');
+    if (settings.showLogo !== false) {
+      addCmd(center);
+      addText('\nPowered by KasQ');
+    }
     
     // Feed and Cut
     addCmd(feedAndCut);
@@ -259,12 +276,47 @@ export const printerService = {
     }[transaction.paymentMethod] || 'Tunai';
 
     const width = settings.paperSize === '80mm' ? '80mm' : '58mm';
+    const maxChars = settings.paperSize === '80mm' ? 48 : 32;
+
+    const fontMap = {
+      'courier': "'Courier New', Courier, monospace",
+      'monospace': "monospace",
+      'sans-serif': "system-ui, -apple-system, sans-serif",
+      'serif': "Georgia, serif"
+    };
+    const selectedFont = fontMap[settings.fontFamily] || fontMap['courier'];
+
+    const titleSizeMap = {
+      'small': '11px',
+      'medium': '13px',
+      'large': '16px'
+    };
+    const bodySizeMap = {
+      'small': '9px',
+      'normal': '11px',
+      'large': '13px'
+    };
+    const titleSize = titleSizeMap[settings.titleFontSize] || '16px';
+    const bodySize = bodySizeMap[settings.bodyFontSize] || '11px';
 
     const headerHtml = settings.headerText 
-      ? `<div style="font-size: 9px; white-space: pre-line; margin-bottom: 4px;">${settings.headerText}</div>`
+      ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; white-space: pre-line; margin-bottom: 4px;">${settings.headerText}</div>`
       : '';
     const footerHtml = settings.footerText
-      ? `<div style="font-size: 9px; white-space: pre-line; margin-top: 6px;">${settings.footerText}</div>`
+      ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; white-space: pre-line; margin-top: 6px;">${settings.footerText}</div>`
+      : '';
+
+    const dividerChar = settings.dividerChar || '-';
+    const dividerText = dividerChar.repeat(maxChars);
+
+    const displayTitle = settings.uppercaseTitle !== false ? businessName.toUpperCase() : businessName;
+
+    const cashierHtml = settings.showCashierName !== false 
+      ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; margin-top: 2px;">Kasir: ${userName}</div>`
+      : '';
+
+    const logoHtml = settings.showLogo !== false
+      ? `<div style="font-size: ${bodySize === '13px' ? '9px' : '8px'}; margin-top: 8px; color: #555;">Powered by KasQ</div>`
       : '';
 
     const html = `
@@ -274,8 +326,8 @@ export const printerService = {
           <style>
             @page { size: ${width} auto; margin: 0; }
             body {
-              font-family: 'Courier New', Courier, monospace;
-              font-size: 11px;
+              font-family: ${selectedFont};
+              font-size: ${bodySize};
               color: #000;
               margin: 0;
               padding: 8px;
@@ -284,25 +336,32 @@ export const printerService = {
             }
             .text-center { text-align: center; }
             .bold { font-weight: bold; }
-            .divider { border-top: 1px dashed #000; margin: 6px 0; }
-            table { width: 100%; border-collapse: collapse; }
+            .divider { 
+              font-family: 'Courier New', monospace; 
+              font-size: ${bodySize}; 
+              letter-spacing: 0.5px; 
+              margin: 6px 0; 
+              white-space: nowrap; 
+              overflow: hidden; 
+            }
+            table { width: 100%; border-collapse: collapse; font-family: ${selectedFont}; font-size: ${bodySize}; }
           </style>
         </head>
         <body>
           <div class="text-center">
-            <div class="bold" style="font-size: 13px;">${businessName.toUpperCase()}</div>
+            <div class="bold" style="font-size: ${titleSize};">${displayTitle}</div>
             ${headerHtml}
-            <div style="font-size: 9px; margin-top: 2px;">Kasir: ${userName}</div>
-            <div style="font-size: 9px;">${dateStr}</div>
-            ${transaction.customerName ? `<div style="font-size: 9px; font-weight: bold; margin-top: 2px;">Pemesan: ${transaction.customerName}</div>` : ''}
+            ${cashierHtml}
+            <div style="font-size: ${bodySize === '13px' ? '11px' : '9px'};">${dateStr}</div>
+            ${transaction.customerName ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; font-weight: bold; margin-top: 2px;">Pemesan: ${transaction.customerName}</div>` : ''}
           </div>
-          <div class="divider"></div>
+          <div class="divider">${dividerText}</div>
           <table>
             <tbody>
               ${itemsHtml}
             </tbody>
           </table>
-          <div class="divider"></div>
+          <div class="divider">${dividerText}</div>
           <table>
             <tr>
               <td class="bold">TOTAL</td>
@@ -323,12 +382,10 @@ export const printerService = {
             </tr>
             ` : ''}
           </table>
-          <div class="divider"></div>
+          <div class="divider">${dividerText}</div>
           <div class="text-center">
             ${footerHtml}
-            <div style="font-size: 8px; margin-top: 8px; color: #555;">
-              Powered by KasQ
-            </div>
+            ${logoHtml}
           </div>
           <script>
             window.onload = function() {

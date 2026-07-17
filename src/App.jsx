@@ -78,6 +78,16 @@ export default function App() {
   const [debts, setDebts] = useState([]);
   const [materials, setMaterials] = useState([]);
 
+  // Diagnostics State
+  const [diagStatus, setDiagStatus] = useState(null); // null | 'running' | 'done'
+  const [diagResults, setDiagResults] = useState({
+    network: { status: 'idle', details: '' },
+    firebase: { status: 'idle', details: '' },
+    gemini: { status: 'idle', details: '' },
+    googleSheets: { status: 'idle', details: '' },
+    microphone: { status: 'idle', details: '' }
+  });
+
   // Common UI / Operation States
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('kasq_gemini_api_key');
@@ -808,6 +818,149 @@ export default function App() {
       setErrorMsg(err.message || 'Gagal melakukan test print.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const runDiagnostics = async () => {
+    setDiagStatus('running');
+    const results = {
+      network: { status: 'running', details: 'Memeriksa internet...' },
+      firebase: { status: 'running', details: 'Menghubungkan ke Firestore...' },
+      gemini: { status: 'running', details: 'Memvalidasi API Key & model...' },
+      googleSheets: { status: 'running', details: 'Menguji Google Sheets Web App...' },
+      microphone: { status: 'running', details: 'Memeriksa izin rekaman...' }
+    };
+    setDiagResults({ ...results });
+
+    // 1. Network check
+    const isOnline = navigator.onLine;
+    results.network = {
+      status: isOnline ? 'success' : 'error',
+      details: isOnline ? 'Tersambung ke Internet' : 'Tidak ada koneksi internet (Offline-First Aktif)'
+    };
+    setDiagResults({ ...results });
+
+    // 2. Microphone check
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+        results.microphone = {
+          status: status.state === 'granted' ? 'success' : status.state === 'prompt' ? 'warning' : 'error',
+          details: status.state === 'granted' 
+            ? 'Izin Mikrofon: Diizinkan (Granted)' 
+            : status.state === 'prompt' 
+              ? 'Izin Mikrofon: Siap Ditanyakan (Prompt)' 
+              : 'Izin Mikrofon: Diblokir (Denied). Harap izinkan melalui ikon gembok di URL browser!'
+        };
+      } else {
+        results.microphone = { status: 'warning', details: 'Browser tidak mendukung Permissions API. Ketuk tombol mic untuk menguji langsung.' };
+      }
+    } catch (e) {
+      results.microphone = { status: 'warning', details: 'Gagal mengecek izin: ' + e.message };
+    }
+    setDiagResults({ ...results });
+
+    // 3. Firebase check
+    if (isOnline) {
+      try {
+        const { firestore } = await import('./services/firebase.service');
+        const { doc, getDoc, setDoc } = await import('firebase/firestore');
+        if (currentUser) {
+          const testRef = doc(firestore, `users/${currentUser.id}/test_connection/ping`);
+          await setDoc(testRef, { timestamp: new Date().toISOString(), test: true }, { merge: true });
+          const snap = await getDoc(testRef);
+          if (snap.exists() && snap.data().test) {
+            results.firebase = { status: 'success', details: 'Koneksi Firestore Berhasil (Dapat Tulis/Baca)' };
+          } else {
+            results.firebase = { status: 'error', details: 'Gagal memverifikasi penulisan data ke Firestore.' };
+          }
+        } else {
+          results.firebase = { status: 'warning', details: 'Silakan masuk akun terlebih dahulu untuk menguji Firebase.' };
+        }
+      } catch (e) {
+        console.error('Firebase Diagnostic Error:', e);
+        let msg = e.message || 'Koneksi ditolak';
+        if (msg.includes('permission-denied')) {
+          msg = 'Ditolak: Aturan Keamanan (Security Rules) Firestore memblokir penulisan, atau database belum dibuat di Firebase Console!';
+        } else if (msg.includes('not-found') || msg.includes('Database')) {
+          msg = 'Database Tidak Ditemukan: Buat database Cloud Firestore terlebih dahulu di Firebase Console!';
+        }
+        results.firebase = { status: 'error', details: `Firestore Gagal: ${msg}` };
+      }
+    } else {
+      results.firebase = { status: 'warning', details: 'Dilewati: Koneksi offline (Firebase ditangguhkan)' };
+    }
+    setDiagResults({ ...results });
+
+    // 4. Google Sheets check
+    if (isOnline) {
+      const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL || '';
+      if (!scriptUrl) {
+        results.googleSheets = { status: 'warning', details: 'Belum dikonfigurasi (VITE_GOOGLE_SCRIPT_URL kosong)' };
+      } else {
+        try {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), 6000);
+          await fetch(scriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ items: [] }),
+            signal: controller.signal
+          });
+          clearTimeout(id);
+          results.googleSheets = { status: 'success', details: 'Koneksi ke Google Script / Sheets Web App Aktif' };
+        } catch (e) {
+          results.googleSheets = { status: 'error', details: 'Gagal menghubungi Google Script: ' + (e.name === 'AbortError' ? 'Koneksi timeout' : e.message) };
+        }
+      }
+    } else {
+      results.googleSheets = { status: 'warning', details: 'Dilewati: Koneksi offline' };
+    }
+    setDiagResults({ ...results });
+
+    // 5. Gemini AI check
+    if (isOnline) {
+      if (!apiKey) {
+        results.gemini = { status: 'warning', details: 'API Key kosong. Silakan masukkan Gemini API Key Anda!' };
+      } else {
+        try {
+          const { GoogleGenAI } = await import('@google/genai');
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: 'say "ping"',
+            config: { maxOutputTokens: 5 }
+          });
+          if (response.text) {
+            results.gemini = { status: 'success', details: 'API Key Valid! Gemini AI merespons: "' + response.text.trim() + '"' };
+          } else {
+            results.gemini = { status: 'error', details: 'Gemini merespons kosong.' };
+          }
+        } catch (e) {
+          results.gemini = { status: 'error', details: 'Gemini Gagal: ' + (e.message || 'API Key salah atau kuota habis.') };
+        }
+      }
+    } else {
+      results.gemini = { status: 'warning', details: 'Dilewati: Koneksi offline (Menggunakan local NLP parser)' };
+    }
+
+    setDiagResults({ ...results });
+    setDiagStatus('done');
+  };
+
+  const handleForceRequestMic = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        setSuccessMsg('Izin mikrofon berhasil diperoleh!');
+        runDiagnostics();
+      } catch (err) {
+        setErrorMsg('Gagal meminta izin mikrofon: ' + err.message);
+      }
+    } else {
+      setErrorMsg('Perangkat ini tidak mendukung input audio.');
     }
   };
 
@@ -2194,6 +2347,83 @@ export default function App() {
                 </div>
               )}
 
+              {/* Connection Diagnostics Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>🔌</span> Alat Diagnostik & Cek Koneksi
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Gunakan alat ini untuk menguji koneksi internet, izin rekaman suara, integrasi database Cloud (Firebase), sinkronisasi Google Sheets, dan status Gemini AI Anda.
+                </p>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    disabled={diagStatus === 'running'}
+                    onClick={runDiagnostics}
+                    className="bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition cursor-pointer flex items-center gap-2"
+                  >
+                    {diagStatus === 'running' ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        <span>Menguji...</span>
+                      </>
+                    ) : (
+                      <span>Mulai Tes Koneksi & Izin</span>
+                    )}
+                  </button>
+
+                  {diagStatus && (
+                    <div className="bg-neutral-950 border border-neutral-850 p-4 rounded-xl space-y-3.5 mt-4">
+                      {Object.entries(diagResults).map(([key, res]) => {
+                        const labelMap = {
+                          network: 'Koneksi Internet',
+                          microphone: 'Izin Mikrofon (Voice)',
+                          firebase: 'Database Cloud (Firebase)',
+                          googleSheets: 'Google Sheets Script',
+                          gemini: 'Gemini AI API'
+                        };
+                        const statusColor = {
+                          idle: 'text-neutral-550',
+                          running: 'text-amber-400 animate-pulse',
+                          success: 'text-emerald-400 font-bold',
+                          warning: 'text-amber-500 font-bold',
+                          error: 'text-red-400 font-bold'
+                        }[res.status];
+
+                        const statusEmoji = {
+                          idle: '⚪',
+                          running: '⏳',
+                          success: '🟢',
+                          warning: '🟡',
+                          error: '🔴'
+                        }[res.status];
+
+                        return (
+                          <div key={key} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 border-b border-neutral-900 pb-2.5 last:border-0 last:pb-0">
+                            <span className="text-neutral-300 font-semibold">{labelMap[key]}</span>
+                            <div className="flex items-center gap-2 text-left sm:text-right">
+                              <span className={statusColor}>
+                                {statusEmoji} {res.details}
+                              </span>
+                              {key === 'microphone' && res.status !== 'success' && (
+                                <button
+                                  type="button"
+                                  onClick={handleForceRequestMic}
+                                  className="bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white border border-violet-500/20 text-[9px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                                >
+                                  Minta Izin Mic
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Profile Details Form */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2537,6 +2767,106 @@ export default function App() {
                       <span>🖨️</span>
                       <span>Uji Coba Cetak (Test Print)</span>
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt Layout & Design Editor Panel */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>🎨</span> Desain & Tata Letak Struk Belanja
+                </h3>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Sesuaikan tampilan struk belanja yang dicetak (baik printer thermal bluetooth maupun printer sistem).
+                </p>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Jenis Font</label>
+                      <select
+                        value={printerSettings.fontFamily || 'courier'}
+                        onChange={(e) => handleUpdatePrinterSetting('fontFamily', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="courier">Courier New (Standard POS)</option>
+                        <option value="monospace">Monospace Bawaan</option>
+                        <option value="sans-serif">Modern Sans-Serif</option>
+                        <option value="serif">Klasik Serif</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Ukuran Font Nama Toko</label>
+                      <select
+                        value={printerSettings.titleFontSize || 'large'}
+                        onChange={(e) => handleUpdatePrinterSetting('titleFontSize', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="large">Besar (Double Size)</option>
+                        <option value="medium">Sedang</option>
+                        <option value="small">Kecil (Sama dengan isi)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Ukuran Font Isi Struk</label>
+                      <select
+                        value={printerSettings.bodyFontSize || 'normal'}
+                        onChange={(e) => handleUpdatePrinterSetting('bodyFontSize', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="large">Besar (13px)</option>
+                        <option value="normal">Normal (11px)</option>
+                        <option value="small">Kecil (9px)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Karakter Pembatas (Divider Line)</label>
+                      <select
+                        value={printerSettings.dividerChar || '-'}
+                        onChange={(e) => handleUpdatePrinterSetting('dividerChar', e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value="-">Garis Putus-Putus (----------)</option>
+                        <option value="=">Garis Ganda (==========)</option>
+                        <option value="*">Bintang (**********)</option>
+                        <option value=".">Titik-Titik (..........)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col justify-center space-y-3 bg-neutral-950/45 p-4 rounded-xl border border-neutral-850">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Nama Toko Huruf Kapital</span>
+                        <input
+                          type="checkbox"
+                          checked={printerSettings.uppercaseTitle !== false}
+                          onChange={(e) => handleUpdatePrinterSetting('uppercaseTitle', e.target.checked)}
+                          className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Tampilkan Nama Kasir</span>
+                        <input
+                          type="checkbox"
+                          checked={printerSettings.showCashierName !== false}
+                          onChange={(e) => handleUpdatePrinterSetting('showCashierName', e.target.checked)}
+                          className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-neutral-300">Tampilkan Logo "Powered by KasQ"</span>
+                        <input
+                          type="checkbox"
+                          checked={printerSettings.showLogo !== false}
+                          onChange={(e) => handleUpdatePrinterSetting('showLogo', e.target.checked)}
+                          className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
