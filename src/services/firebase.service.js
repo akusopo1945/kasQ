@@ -63,11 +63,20 @@ let activeSubscriptions = [];
  * Pushes unsynced local changes (inserts, updates, and deletes) to Firestore & Google Sheets.
  * @param {string|number} userId Current logged in user ID
  */
-export async function syncLocalToCloud(userId) {
+export async function syncLocalToCloud(userId, onProgress = null) {
   if (!navigator.onLine || !userId) return;
 
   const uId = Number(userId);
   const collections = ['products', 'transactions', 'debts', 'materials'];
+  
+  const totalSteps = 6;
+  let currentStep = 0;
+  const reportProgress = (msg) => {
+    if (onProgress) {
+      currentStep++;
+      onProgress(Math.round((currentStep / totalSteps) * 100), msg);
+    }
+  };
 
   try {
     // 1. Sync additions and modifications
@@ -78,58 +87,66 @@ export async function syncLocalToCloud(userId) {
         .and(item => item.status_sync === 0)
         .toArray();
 
-      if (unsynced.length === 0) continue;
+      if (unsynced.length > 0) {
+        const batch = writeBatch(firestore);
+        const nowStr = new Date().toISOString();
+        const itemsToUpdateLocal = [];
+        const sheetOps = [];
 
-      const batch = writeBatch(firestore);
-      const nowStr = new Date().toISOString();
-      const itemsToUpdateLocal = [];
-      const sheetOps = [];
+        for (const item of unsynced) {
+          const docRef = doc(firestore, `users/${uId}/${colName}`, String(item.id));
+          const updatedAt = item.updatedAt || nowStr;
+          const dataToUpload = { 
+            ...item, 
+            status_sync: 1, 
+            updatedAt 
+          };
+          
+          // Add to Firestore batch
+          batch.set(docRef, dataToUpload, { merge: true });
+          
+          // Add to Google Sheets batch
+          sheetOps.push({
+            sheetName: sheetNameMap[colName],
+            action: 'sync',
+            docId: String(item.id),
+            data: dataToUpload,
+            headers: headersMap[colName]
+          });
 
-      for (const item of unsynced) {
-        const docRef = doc(firestore, `users/${uId}/${colName}`, String(item.id));
-        const updatedAt = item.updatedAt || nowStr;
-        const dataToUpload = { 
-          ...item, 
-          status_sync: 1, 
-          updatedAt 
-        };
-        
-        // Add to Firestore batch
-        batch.set(docRef, dataToUpload, { merge: true });
-        
-        // Add to Google Sheets batch
-        sheetOps.push({
-          sheetName: sheetNameMap[colName],
-          action: 'sync',
-          docId: String(item.id),
-          data: dataToUpload,
-          headers: headersMap[colName]
-        });
+          itemsToUpdateLocal.push({ id: item.id, updatedAt });
+        }
 
-        itemsToUpdateLocal.push({ id: item.id, updatedAt });
+        // Send all updates in 1 single HTTP request
+        if (googleScriptUrl && sheetOps.length > 0) {
+          await sendToGoogleScriptBatch(sheetOps);
+        }
+
+        await batch.commit();
+
+        // Mark locally as synced (using isSyncingFromCloud to bypass Dexie update hooks)
+        isSyncingFromCloud.value = true;
+        try {
+          await db.transaction('rw', db[colName], async () => {
+            for (const updateInfo of itemsToUpdateLocal) {
+              await db[colName].update(updateInfo.id, { 
+                status_sync: 1,
+                updatedAt: updateInfo.updatedAt
+              });
+            }
+          });
+        } finally {
+          isSyncingFromCloud.value = false;
+        }
       }
 
-      // Send all updates in 1 single HTTP request
-      if (googleScriptUrl && sheetOps.length > 0) {
-        await sendToGoogleScriptBatch(sheetOps);
-      }
-
-      await batch.commit();
-
-      // Mark locally as synced (using isSyncingFromCloud to bypass Dexie update hooks)
-      isSyncingFromCloud.value = true;
-      try {
-        await db.transaction('rw', db[colName], async () => {
-          for (const updateInfo of itemsToUpdateLocal) {
-            await db[colName].update(updateInfo.id, { 
-              status_sync: 1,
-              updatedAt: updateInfo.updatedAt
-            });
-          }
-        });
-      } finally {
-        isSyncingFromCloud.value = false;
-      }
+      const labelMap = {
+        products: 'Katalog Produk',
+        transactions: 'Transaksi Penjualan',
+        debts: 'Catatan Kasbon',
+        materials: 'Bahan Baku'
+      };
+      reportProgress(`Menyinkronkan ${labelMap[colName] || colName}...`);
     }
 
     // 2. Sync deletions (Tombstones)
@@ -178,6 +195,7 @@ export async function syncLocalToCloud(userId) {
         isSyncingFromCloud.value = false;
       }
     }
+    reportProgress('Menyinkronkan data terhapus...');
 
     // 3. Sync User Profile
     const userLocal = await db.users.get(uId);
@@ -188,6 +206,7 @@ export async function syncLocalToCloud(userId) {
         updatedAt: userLocal.updatedAt || new Date().toISOString()
       }, { merge: true });
     }
+    reportProgress('Menyinkronkan profil & pengaturan...');
   } catch (err) {
     console.error("Gagal melakukan upload sync ke Firestore/Google Sheets:", err);
     throw err;
@@ -223,6 +242,16 @@ export function subscribeToCloudChanges(userId, onSyncComplete) {
             if (session && session.id === uId) {
               const updatedSession = { ...session, ...cloudUserData };
               localStorage.setItem('kasq_session', JSON.stringify(updatedSession));
+            }
+            
+            // Sync settings and API key from cloud profile to local storage
+            if (cloudUserData.printerSettings) {
+              localStorage.setItem('kasq_printer_settings', JSON.stringify(cloudUserData.printerSettings));
+              window.dispatchEvent(new CustomEvent('printer-settings-updated', { detail: cloudUserData.printerSettings }));
+            }
+            if (cloudUserData.geminiApiKey) {
+              localStorage.setItem('kasq_gemini_api_key', cloudUserData.geminiApiKey);
+              window.dispatchEvent(new CustomEvent('api-key-updated', { detail: cloudUserData.geminiApiKey }));
             }
           } finally {
             isSyncingFromCloud.value = false;

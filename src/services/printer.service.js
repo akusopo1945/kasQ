@@ -14,10 +14,90 @@ const DEFAULT_SETTINGS = {
   showLogo: true,           // true | false
   showCashierName: true,    // true | false
   uppercaseTitle: true,     // true | false
+  bottomFeedLines: 1,       // 0 to 5, default 1 to save paper
+  autoCut: false,           // Auto cut receipt (only recommended for 80mm cutters)
+  showLogoImage: false,     // true | false
+  logoImageBase64: '',      // base64 image data
+  headerAlign: 'center',    // 'left' | 'center' | 'right'
 };
 
 let activeDevice = null;
 let activeCharacteristic = null;
+
+// Standalone helper to convert base64 image to 1-bit ESC/POS raster bit image bytes
+function convertImageToEscPosBytes(base64Image, targetWidth = 192) {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.src = base64Image;
+    img.onload = () => {
+      try {
+        const scale = targetWidth / img.width;
+        const targetHeight = Math.round(img.height * scale);
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        
+        const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+        const pixels = imgData.data;
+        
+        const widthInBytes = targetWidth / 8;
+        const data = new Uint8Array(widthInBytes * targetHeight);
+        
+        for (let y = 0; y < targetHeight; y++) {
+          for (let x = 0; x < widthInBytes; x++) {
+            let byteVal = 0;
+            for (let bit = 0; bit < 8; bit++) {
+              const pixelX = x * 8 + bit;
+              const index = (y * targetWidth + pixelX) * 4;
+              let isBlack = false;
+              
+              if (pixelX < targetWidth) {
+                const r = pixels[index];
+                const g = pixels[index + 1];
+                const b = pixels[index + 2];
+                const a = pixels[index + 3];
+                
+                if (a < 50) {
+                  isBlack = false;
+                } else {
+                  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+                  isBlack = luminance < 128;
+                }
+              }
+              if (isBlack) {
+                byteVal |= (1 << (7 - bit));
+              }
+            }
+            data[y * widthInBytes + x] = byteVal;
+          }
+        }
+        
+        const header = new Uint8Array([
+          0x1D, 0x76, 0x30, 0x00,
+          widthInBytes & 0xFF,
+          (widthInBytes >> 8) & 0xFF,
+          targetHeight & 0xFF,
+          (targetHeight >> 8) & 0xFF
+        ]);
+        
+        const result = new Uint8Array(header.length + data.length);
+        result.set(header);
+        result.set(data, header.length);
+        resolve(result);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = (e) => reject(new Error('Gagal memuat gambar logo'));
+  });
+}
 
 export const printerService = {
   // Load settings
@@ -121,7 +201,7 @@ export const printerService = {
   },
 
   // Format ESC/POS Receipt
-  formatEscPos(transaction, businessName, userName, settings) {
+  formatEscPos(transaction, businessName, userName, settings, logoBytes = null) {
     const maxChars = settings.paperSize === '80mm' ? 48 : 32;
     const encoder = new TextEncoder();
     
@@ -132,9 +212,47 @@ export const printerService = {
     const right = new Uint8Array([0x1B, 0x61, 0x02]); // Align right
     const boldOn = new Uint8Array([0x1B, 0x45, 0x01]); // Bold on
     const boldOff = new Uint8Array([0x1B, 0x45, 0x00]); // Bold off
-    const feedAndCut = new Uint8Array([0x1B, 0x64, 0x05, 0x1D, 0x56, 0x42, 0x00]); // Feed 5 lines and partial cut
+    const feedLines = typeof settings.bottomFeedLines !== 'undefined' ? Number(settings.bottomFeedLines) : 1;
+    const shouldCut = settings.autoCut ?? (settings.paperSize === '80mm');
+    const feedAndCut = shouldCut
+      ? new Uint8Array([0x1B, 0x64, feedLines, 0x1D, 0x56, 0x42, 0x00]) // Feed settings.bottomFeedLines lines and partial cut
+      : new Uint8Array([0x1B, 0x64, feedLines]); // Feed settings.bottomFeedLines lines, no cut
     const doubleSize = new Uint8Array([0x1B, 0x21, 0x30]); // Large font
     const normalSize = new Uint8Array([0x1B, 0x21, 0x00]); // Normal font
+
+    const wrapTextToLines = (text, width) => {
+      const words = text.split(' ');
+      const lines = [];
+      let currentLine = '';
+      
+      for (const word of words) {
+        if (!word) continue;
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        if (testLine.length <= width) {
+          currentLine = testLine;
+        } else {
+          if (word.length > width) {
+            if (currentLine) {
+              lines.push(currentLine);
+              currentLine = '';
+            }
+            let remaining = word;
+            while (remaining.length > width) {
+              lines.push(remaining.substring(0, width));
+              remaining = remaining.substring(width);
+            }
+            currentLine = remaining;
+          } else {
+            lines.push(currentLine);
+            currentLine = word;
+          }
+        }
+      }
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      return lines;
+    };
 
     let chunks = [];
 
@@ -159,13 +277,31 @@ export const printerService = {
 
     // Header
     addCmd(init);
-    addCmd(center);
-    if (settings.titleFontSize !== 'small') {
+    
+    // Header Alignment Option
+    const headerAlign = settings.headerAlign || 'center';
+    const headerAlignCmd = headerAlign === 'left' ? left : headerAlign === 'right' ? right : center;
+    addCmd(headerAlignCmd);
+
+    if (logoBytes) {
+      addCmd(logoBytes);
+      addCmd(new Uint8Array([0x0A])); // Line feed
+    }
+    
+    const isDoubleSize = settings.titleFontSize !== 'small';
+    if (isDoubleSize) {
       addCmd(doubleSize);
     }
     addCmd(boldOn);
+    
     const displayTitle = settings.uppercaseTitle !== false ? businessName.toUpperCase() : businessName;
-    addText(displayTitle);
+    const titleMaxChars = isDoubleSize ? Math.floor(maxChars / 2) : maxChars;
+    const titleLines = wrapTextToLines(displayTitle, titleMaxChars);
+    
+    titleLines.forEach(line => {
+      addText(line);
+    });
+    
     addCmd(normalSize);
     addCmd(boldOff);
 
@@ -173,7 +309,7 @@ export const printerService = {
       addText(settings.headerText);
     }
     
-    addCmd(center);
+    addCmd(headerAlignCmd);
     if (settings.showCashierName !== false) {
       addText(`Kasir: ${userName}`);
     }
@@ -225,7 +361,7 @@ export const printerService = {
 
     if (settings.showLogo !== false) {
       addCmd(center);
-      addText('\nPowered by KasQ');
+      addText('Powered by KasQ');
     }
     
     // Feed and Cut
@@ -245,12 +381,22 @@ export const printerService = {
 
   // Write bytes in chunks to avoid GATT MTU overload
   async writeCharacteristicInChunks(characteristic, data) {
-    const maxChunkSize = 20; // Safe BLE payload size
+    const canWriteWithoutResponse = characteristic.properties.writeWithoutResponse;
+    const hasWriteWithoutResponseMethod = typeof characteristic.writeValueWithoutResponse === 'function';
+    const useWithoutResponse = canWriteWithoutResponse && hasWriteWithoutResponseMethod;
+
+    // Use larger chunk size and shorter delay for writeWithoutResponse
+    const maxChunkSize = useWithoutResponse ? 120 : 20;
+    const delayMs = useWithoutResponse ? 5 : 15;
+
     for (let i = 0; i < data.length; i += maxChunkSize) {
       const chunk = data.slice(i, i + maxChunkSize);
-      await characteristic.writeValue(chunk);
-      // Brief delay to allow printer buffer to process
-      await new Promise(resolve => setTimeout(resolve, 15));
+      if (useWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(chunk);
+      } else {
+        await characteristic.writeValue(chunk);
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   },
 
@@ -263,8 +409,8 @@ export const printerService = {
 
     const itemsHtml = transaction.items.map(item => `
       <tr>
-        <td style="padding: 3px 0;">${item.name} x${item.qty}</td>
-        <td style="text-align: right; padding: 3px 0;">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
+        <td style="padding: 2px 0;">${item.name} x${item.qty}</td>
+        <td style="text-align: right; padding: 2px 0;">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</td>
       </tr>
     `).join('');
 
@@ -303,7 +449,7 @@ export const printerService = {
       ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; white-space: pre-line; margin-bottom: 4px;">${settings.headerText}</div>`
       : '';
     const footerHtml = settings.footerText
-      ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; white-space: pre-line; margin-top: 6px;">${settings.footerText}</div>`
+      ? `<div style="font-size: ${bodySize === '13px' ? '11px' : '9px'}; white-space: pre-line; margin-top: 4px;">${settings.footerText}</div>`
       : '';
 
     const dividerChar = settings.dividerChar || '-';
@@ -316,8 +462,15 @@ export const printerService = {
       : '';
 
     const logoHtml = settings.showLogo !== false
-      ? `<div style="font-size: ${bodySize === '13px' ? '9px' : '8px'}; margin-top: 8px; color: #555;">Powered by KasQ</div>`
+      ? `<div style="font-size: ${bodySize === '13px' ? '9px' : '8px'}; margin-top: 4px; color: #555;">Powered by KasQ</div>`
       : '';
+
+    const logoImageHtml = (settings.showLogoImage && settings.logoImageBase64)
+      ? `<div style="margin-bottom: 8px;"><img src="${settings.logoImageBase64}" style="max-width: 60px; max-height: 60px; object-fit: contain;" /></div>`
+      : '';
+
+    const headerAlign = settings.headerAlign || 'center';
+    const alignClass = `text-${headerAlign}`;
 
     const html = `
       <html>
@@ -330,17 +483,19 @@ export const printerService = {
               font-size: ${bodySize};
               color: #000;
               margin: 0;
-              padding: 8px;
+              padding: 4px;
               width: ${width};
               box-sizing: border-box;
             }
+            .text-left { text-align: left; }
             .text-center { text-align: center; }
+            .text-right { text-align: right; }
             .bold { font-weight: bold; }
             .divider { 
               font-family: 'Courier New', monospace; 
               font-size: ${bodySize}; 
               letter-spacing: 0.5px; 
-              margin: 6px 0; 
+              margin: 4px 0; 
               white-space: nowrap; 
               overflow: hidden; 
             }
@@ -348,7 +503,8 @@ export const printerService = {
           </style>
         </head>
         <body>
-          <div class="text-center">
+          <div class="${alignClass}">
+            ${logoImageHtml}
             <div class="bold" style="font-size: ${titleSize};">${displayTitle}</div>
             ${headerHtml}
             ${cashierHtml}
@@ -418,11 +574,21 @@ export const printerService = {
       cashChange: 8000
     };
 
+    let logoBytes = null;
+    if (settings.showLogoImage && settings.logoImageBase64) {
+      try {
+        const targetWidth = settings.paperSize === '80mm' ? 384 : 192;
+        logoBytes = await convertImageToEscPosBytes(settings.logoImageBase64, targetWidth);
+      } catch (e) {
+        console.error('Failed to convert logo to ESC/POS:', e);
+      }
+    }
+
     if (settings.connectionType === 'bluetooth') {
       if (!this.isBluetoothConnected()) {
         throw new Error('Printer bluetooth belum terhubung. Silakan pasangkan terlebih dahulu.');
       }
-      const bytes = this.formatEscPos(mockTxn, businessName, userName, settings);
+      const bytes = this.formatEscPos(mockTxn, businessName, userName, settings, logoBytes);
       await this.writeCharacteristicInChunks(activeCharacteristic, bytes);
     } else {
       this.printSystem(mockTxn, businessName, userName, settings);
@@ -432,6 +598,15 @@ export const printerService = {
   // Main print route
   async printReceipt(transaction, businessName, userName) {
     const settings = this.getSettings();
+    let logoBytes = null;
+    if (settings.showLogoImage && settings.logoImageBase64) {
+      try {
+        const targetWidth = settings.paperSize === '80mm' ? 384 : 192;
+        logoBytes = await convertImageToEscPosBytes(settings.logoImageBase64, targetWidth);
+      } catch (e) {
+        console.error('Failed to convert logo to ESC/POS:', e);
+      }
+    }
     
     if (settings.connectionType === 'bluetooth') {
       if (!this.isBluetoothConnected()) {
@@ -441,7 +616,7 @@ export const printerService = {
         return;
       }
       try {
-        const bytes = this.formatEscPos(transaction, businessName, userName, settings);
+        const bytes = this.formatEscPos(transaction, businessName, userName, settings, logoBytes);
         await this.writeCharacteristicInChunks(activeCharacteristic, bytes);
       } catch (err) {
         console.error('Bluetooth printing failed:', err);

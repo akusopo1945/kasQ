@@ -1,0 +1,454 @@
+Laporan Penjualan Bersua Sejenak,,,,
+ID,Tanggal,Metode Bayar,Total,Detail Produk
+472,2026-07-16 23:59,QRIS,32000,"Teh Panas (2), Sate Usus (3), Tempura Bintang (1), Scallop putih (1), Tempura (1), Mie Goreng (1), Telur rebus (1)"
+476,2026-07-16 23:59,Tunai,17000,"sosis merah (4), All Sachet Dingin (1)"
+475,2026-07-16 23:58,Tunai,23000,"Teh TARIK PANAS (1), sosis merah (2), Sate Telor Puyuh (1), Kopi Hitam (1)"
+471,2026-07-16 23:05,Tunai,9000,"Kepala / ndas (1), Mie Goreng (1)"
+470,2026-07-16 23:02,Tunai,33000,"All Sachet Panas (2), Kopi Hitam (1), Sate Telor Puyuh (2), Tempura (2), Sate Usus (2)"
+469,2026-07-16 22:37,Tunai,19000,"Sate Usus (1), Sate Telor Puyuh (3), Scallop putih (1), Krupuk (2)"
+468,2026-07-16 22:16,QRIS,22000,"Tempura Bintang (1), Tempura (1), Sate Usus (1), sosis merah (2), Sate Telor Puyuh (1), All Sachet Dingin (1)"
+467,2026-07-16 22:16,QRIS,18500,"Tempura (1), Tempura Bintang (1), sosis merah (1), Scallop putih (1), Sate Telor Puyuh (1), All Sachet Dingin (1)"
+466,2026-07-16 22:16,QRIS,20000,"sosis merah (2), Sate Telor Puyuh (2), Tempura (1), All Sachet Dingin (1)"
+465,2026-07-16 22:15,QRIS,16500,"Tempura (1), Scallop putih (1), Sate Usus (1), Krupuk (1), All Sachet Dingin (1)"
+464,2026-07-16 22:00,Tunai,20000,"sosis merah (2), Sate Telor Puyuh (1), All Sachet Dingin (1), es teh (1)"
+463,2026-07-16 21:49,Tunai,28000,"Kopi Hitam (1), Milo Panas (1), Tempura (4), Scallop putih (1), Tempura Bintang (1), sosis merah (2)"
+462,2026-07-16 21:00,Tunai,36000,"Milo Panas (2), Sate Telor Puyuh (2), Tempura Bintang (2), Tempura (2), Sate Usus (2), Scallop putih (2)"
+461,2026-07-16 19:35,Tunai,30000,"Kopi Hitam (1), Sate Usus (3), Sate Telor Puyuh (3), All Sachet Dingin (1)"
+460,2026-07-16 19:33,Tunai,33000,"Tempura (5), Tempura Bintang (3), Kopi Hitam (1), All Sachet Panas (1), Sate Usus (1), Sate Telor Puyuh (1)"
+459,2026-07-16 19:32,Tunai,21000,All Sachet Dingin (3)
+477,2026-07-14 11:21,Tunai,329000,"Sate Telor Puyuh (9), Nasi Kucing / Sego (18), All Sachet Dingin (10), All Sachet Panas (9), Kopi Hitam (7), Sate Usus (19), Tempura (16)"
+458,2026-07-13 23:45,Tunai,30000,"es teh (2), All Sachet Dingin (2), Sate Telor Puyuh (2)"
+457,2026-07-13 22:56,Tunai,19000,"Sate Usus (2), Tempura (1), Tempura Bintang (2), Scallop putih (2), Rempelo ati (1)"
+456,2026-07-13 22:42,Tunai,6000,Sate Usus (2)
+455,2026-07-13 22:22,Tunai,5000,Kopi Hitam (1)
+454,2026-07-13 21:41,Tunai,14000,"Sate Usus (1), Sate Telor Puyuh (1), Tempura Bintang (2), Scallop putih (2)"
+453,2026-07-13 21:37,QRIS,36000,"Nasi Kucing / Sego (4), Tempura (2), Tempura Bintang (1), Scallop putih (1), Milo Panas (1), All Sachet Dingin (1), Sate Usus (1)"
+452,2026-07-13 21:13,Tunai,12000,"Nasi Kucing / Sego (1), Tempura (1), Tempura Bintang (1), Kopi Hitam (1)"
+451,2026-07-13 20:58,Tunai,16000,"Sate Usus (2), Sate Telor Puyuh (2), Tempura (2)"
+450,2026-07-13 20:58,Tunai,40000,"Tempura (2), Tempura Bintang (2), Scallop putih (3), Rempelo ati (2), Sate Usus (2), Nasi Kucing / Sego (1), Teh Panas (1), Kopi Susu Racik (1)"
+449,2026-07-13 20:41,Tunai,9000,"All Sachet Panas (1), Sate Usus (1)"
+448,2026-07-13 20:40,Tunai,21000,"Sate Telor Puyuh (2), Sate Usus (2), All Sachet Panas (1), Nasi Kucing / Sego (1)"
+447,2026-07-13 20:36,Tunai,30000,"Tempura (3), Tempura Bintang (3), Sate Usus (4), Sate Telor Puyuh (2)"
+446,2026-07-13 20:26,Tunai,46000,"Sate Usus (3), Sate Telor Puyuh (3), Tempura (1), Tempura Bintang (2), Scallop putih (2), All Sachet Panas (3)"
+445,2026-07-13 19:32,Tunai,10000,Kopi Hitam (2)
+444,2026-07-13 19:24,Tunai,24000,"Nasi Kucing / Sego (1), Tempura (1), Tempura Bintang (3), Sate Telor Puyuh (1), es teh (2)"
+443,2026-07-13 19:23,Tunai,6000,Nasi Kucing / Sego (2)
+442,2026-07-12 22:08,Tunai,7000,All Sachet Dingin (1)
+441,2026-07-12 22:07,Tunai,10000,Es Teh Tarik (1)
+440,2026-07-12 22:06,Tunai,26000,"Sate Telor Puyuh (4), All Sachet Dingin (2)"
+439,2026-07-12 21:39,Tunai,21000,"Mie Goreng (3), Telur rebus (1)"
+438,2026-07-12 21:30,Tunai,25000,"Tempura (3), Sate Usus (1), Rempelo ati (1), Scallop putih (1), Kopi Hitam (1), All Sachet Panas (1)"
+437,2026-07-12 21:01,Tunai,27000,"Tempura Bintang (2), Sate Usus (2), Tempura (2), All Sachet Panas (1), All Sachet Dingin (1)"
+436,2026-07-12 19:53,Tunai,15000,"Nasi Kucing / Sego (3), Sate Usus (1), Rempelo ati (1)"
+435,2026-07-12 19:48,Tunai,26000,"Mie Goreng (2), All Sachet Dingin (2)"
+434,2026-07-12 19:44,Tunai,16000,"All Sachet Panas (1), Krupuk (4)"
+430,2026-07-11 23:53,Tunai,12000,All Sachet Panas (2)
+429,2026-07-11 23:53,Tunai,34000,"Sate Jamur (2), Sate Telor Puyuh (2), Sate Usus (2), Wedang Jahe (1), Wedang Uwuh (1)"
+428,2026-07-11 23:52,Tunai,12000,Mie Goreng (2)
+427,2026-07-11 22:58,QRIS,20000,"Sate Pentol (1), Tempura (1), Sate Usus (2), Rempelo ati (2), Sate Telor Puyuh (1)"
+426,2026-07-11 22:51,Tunai,28000,"Susu Jahe (1), All Sachet Panas (1), Sate Usus (1), Sate Pentol (1), Sate Jamur (2), Tempura Bintang (1)"
+425,2026-07-11 22:39,Tunai,6000,All Sachet Panas (1)
+424,2026-07-11 22:02,QRIS,32000,"Wedang Jahe (1), Susu Jahe (1), Nasi Kucing / Sego (1), Tempura (2), Sate Telor Puyuh (1), Sate Jamur (2)"
+423,2026-07-11 21:54,Tunai,8000,Wedang Jahe (1)
+422,2026-07-11 21:53,Tunai,8000,"Sate Usus (2), Tempura Bintang (1)"
+421,2026-07-11 21:53,Tunai,52000,"Sate Usus (2), Sate Telor Puyuh (2), Scallop putih (1), Tempura (1), Nasi Kucing / Sego (1), Mie Goreng (2), Telur rebus (1), All Sachet Dingin (1), Kopi Hitam (1), All Sachet Panas (1)"
+420,2026-07-11 21:35,Tunai,12000,Mie Goreng (2)
+419,2026-07-11 21:35,QRIS,22000,"All Sachet Dingin (2), jamur crispy (1), Sate Telor Puyuh (1)"
+418,2026-07-11 21:09,Tunai,33000,"Sate Jamur (3), Sate Usus (2), Rempelo ati (2), Tempura (3), Nasi Kucing / Sego (3)"
+417,2026-07-11 21:06,Tunai,33000,"Sate Usus (4), Tempura (2), Susu Jahe (1), All Sachet Dingin (1)"
+416,2026-07-11 20:53,Tunai,23000,"Kopi Susu Racik (1), Tempura (2), Tempura Bintang (1), Scallop putih (2), Sate Usus (2)"
+415,2026-07-11 20:50,QRIS,7000,All Sachet Dingin (1)
+414,2026-07-11 20:50,Tunai,24000,"Sate Usus (4), Nasi Kucing / Sego (4)"
+413,2026-07-11 20:27,Tunai,40000,"Chocolatos Panas (4), Sate Pentol (1), Tempura (1), Sate Telor Puyuh (1), Rempelo ati (1), Sate Usus (1), Tempura Bintang (1)"
+412,2026-07-11 20:20,Tunai,11000,"Milo Panas (1), Krupuk (2)"
+411,2026-07-11 20:10,Tunai,15000,"All Sachet Dingin (1), Tempura (2), Tempura Bintang (2)"
+410,2026-07-11 20:10,Tunai,10000,"Tempura (1), Tempura Bintang (2), Scallop putih (2)"
+409,2026-07-11 20:10,Tunai,6000,All Sachet Panas (1)
+408,2026-07-11 20:09,Tunai,24000,"Sate Usus (4), Sate Telor Puyuh (2), Rempelo ati (2)"
+407,2026-07-11 20:09,QRIS,18000,"Nasi Kucing / Sego (2), Rempelo ati (2), Sate Usus (1), Sate Telor Puyuh (1)"
+406,2026-07-11 20:09,QRIS,16000,"Susu Jahe (1), All Sachet Panas (1)"
+405,2026-07-11 20:08,Tunai,18000,"Wedang Uwuh (1), wedang jahe kecil (2)"
+433,2026-07-11 00:48,Tunai,9000,Rempelo ati (3)
+432,2026-07-11 00:48,Tunai,30000,krupuk rambak panjang (1)
+431,2026-07-11 00:48,QRIS,30000,krupuk rambak panjang (1)
+404,2026-07-10 23:32,QRIS,15000,"Sate Usus (1), Rempelo ati (2), Aren kopi Panas (1)"
+403,2026-07-10 23:30,QRIS,21000,"Sate Usus (3), Sate Telor Puyuh (1), Rempelo ati (1), Scallop putih (1), Teh Panas (1)"
+402,2026-07-10 23:27,QRIS,7000,All Sachet Dingin (1)
+401,2026-07-10 23:27,Tunai,14500,"Sate Telor Puyuh (4), Krupuk (1)"
+400,2026-07-10 23:25,Tunai,12000,"Krupuk (2), Sate Usus (1), wedang jahe kecil (1)"
+399,2026-07-10 22:17,Tunai,18000,"Sate Usus (2), Sate Telor Puyuh (2), Rempelo ati (1), Sate Pentol (1)"
+398,2026-07-10 21:42,Tunai,10000,Kopi Hitam (2)
+397,2026-07-10 21:07,Tunai,12000,"Mie Goreng (1), All Sachet Panas (1)"
+396,2026-07-10 21:04,Tunai,54000,"Sate Usus (2), Sate Pentol (2), Rempelo ati (2), Sate Telor Puyuh (3), Nasi Kucing / Sego (3), Wedang Uwuh (1), jeruk panas (1), Scallop putih (1)"
+395,2026-07-10 21:02,Tunai,23000,"All Sachet Dingin (2), Sate Telor Puyuh (3)"
+394,2026-07-10 20:53,Tunai,12000,"All Sachet Panas (1), Mie Goreng (1)"
+393,2026-07-10 20:52,Tunai,6000,All Sachet Panas (1)
+392,2026-07-10 20:16,Tunai,17000,"Wedang Jahe (1), Sate Usus (1), Sate Telor Puyuh (1), Nasi Kucing / Sego (1)"
+391,2026-07-10 19:49,Tunai,73000,"Aren kopi Panas (1), Milo Panas (1), Susu Jahe (1), Sate Usus (7), Sate Telor Puyuh (6), Rempelo ati (2), Nasi Kucing / Sego (2)"
+389,2026-07-10 18:43,Tunai,15000,"Teh TARIK PANAS (1), Kopi Hitam (1)"
+388,2026-07-10 18:40,Tunai,17000,"All Sachet Panas (2), Krupuk (2)"
+387,2026-07-10 18:10,Tunai,10000,"Nasi Kucing / Sego (1), All Sachet Dingin (1)"
+390,2026-07-09 23:51,Tunai,19000,"All Sachet Dingin (2), es teh (1)"
+385,2026-07-09 23:38,Tunai,7000,All Sachet Dingin (1)
+384,2026-07-09 23:37,Tunai,6000,All Sachet Panas (1)
+383,2026-07-09 23:18,QRIS,14000,"Teh Panas (1), Kopi Hitam (2)"
+382,2026-07-09 23:15,Tunai,3000,Sate Usus (1)
+381,2026-07-09 22:26,Tunai,11000,"Kopi Hitam (1), Nasi Kucing / Sego (1), Sate Telor Puyuh (1)"
+380,2026-07-09 22:19,Tunai,19000,"Sate Usus (2), Rempelo ati (2), Sate Telor Puyuh (1), Scallop putih (2)"
+379,2026-07-09 22:15,Tunai,37500,"Nasi Kucing / Sego (4), Sate Usus (2), Sate Telor Puyuh (1), Scallop putih (1), All Sachet Panas (2), Krupuk (1)"
+378,2026-07-09 22:10,Tunai,39000,"Sate Usus (4), Sate Telor Puyuh (4), Nasi Kucing / Sego (5)"
+377,2026-07-09 21:57,Tunai,26000,"All Sachet Panas (2), Sate Usus (1), Rempelo ati (1), Scallop putih (1), Sate Pentol (1), Sate Telor Puyuh (1)"
+376,2026-07-09 21:55,Tunai,53500,"Susu Jahe (1), All Sachet Panas (1), Milo Panas (1), Tempura (2), Sate Pentol (2), Sate Usus (3), Krupuk (5)"
+375,2026-07-09 21:54,Tunai,62000,"Sate Pentol (2), Scallop putih (3), Tempura (2), Sate Telor Puyuh (3), Chocolatos Panas (2), Sate Usus (1), Krupuk (4), All Sachet Panas (1), Nasi Kucing / Sego (2)"
+374,2026-07-09 21:51,Tunai,18000,"Sate Pentol (1), Sate Usus (1), All Sachet Dingin (1), Krupuk (2)"
+373,2026-07-09 21:44,Tunai,35000,"All Sachet Dingin (1), Kopi Hitam (1), Sate Usus (2), Rempelo ati (1), Tempura (1), Sate Pentol (1), Sate Telor Puyuh (2), Nasi Kucing / Sego (1)"
+372,2026-07-09 21:36,Tunai,18000,"All Sachet Panas (2), Sate Usus (2)"
+371,2026-07-09 21:21,QRIS,13000,"Sate Telor Puyuh (1), Tempura (1), Sate Usus (1), Kopi Hitam (1)"
+370,2026-07-09 21:18,Tunai,14000,"Sate Usus (2), Sate Telor Puyuh (2), Tempura (1)"
+369,2026-07-09 20:03,Tunai,20000,"Scallop putih (2), Tempura (2), Sate Pentol (2), Milo Panas (1)"
+368,2026-07-09 19:39,Tunai,51000,Nasi Kucing / Sego (17)
+367,2026-07-09 19:38,Tunai,10000,Kopi Hitam (2)
+366,2026-07-09 19:37,Tunai,5000,Kopi Hitam (1)
+362,2026-07-08 23:17,Tunai,3000,Sate Telor Puyuh (1)
+361,2026-07-08 22:30,Tunai,3000,Sate Usus (1)
+360,2026-07-08 22:14,Tunai,8000,Wedang Jahe (1)
+359,2026-07-08 22:04,Tunai,20000,"Tempura Bintang (2), Scallop putih (2), Sate Pentol (4)"
+358,2026-07-08 21:55,Tunai,2500,Krupuk (1)
+357,2026-07-08 20:09,Tunai,10000,Kopi Hitam (2)
+356,2026-07-08 19:58,Tunai,6000,Chocolatos Panas (1)
+355,2026-07-08 19:57,Tunai,21000,"Sate Telor Puyuh (4), Nasi Kucing / Sego (3)"
+365,2026-07-08 19:19,Tunai,25000,"Kopi Hitam (1), es teh (2), All Sachet Dingin (1), Sate Telor Puyuh (1)"
+354,2026-07-08 19:11,Tunai,18000,"Tempura (1), Scallop putih (1), Tempura Bintang (1), Sate Telor Puyuh (1), Kopi Hitam (1), Teh Panas (1)"
+353,2026-07-08 18:36,Tunai,65000,"Sate Telor Puyuh (3), Kepala / ndas (5), Ceker (3), Sate Usus (6), Rempelo ati (1), Nasi Kucing / Sego (3), Krupuk (2)"
+352,2026-07-07 22:44,Tunai,5000,Krupuk (2)
+351,2026-07-07 22:43,Tunai,45000,"Tempura (5), Tempura Bintang (3), Scallop putih (2), Teh Panas (1), All Sachet Dingin (1), Sate Telor Puyuh (3), es teh (1)"
+350,2026-07-07 22:40,Tunai,25000,"Sate Usus (4), Tempura Bintang (2), Sate Pentol (1), Milo Panas (1)"
+349,2026-07-07 19:22,Tunai,10000,Krupuk (4)
+348,2026-07-07 19:17,Tunai,217000,"Sate Usus (4), Sate Telor Puyuh (10), Tempura (2), Tempura Bintang (3), Scallop putih (1), Nasi Kucing / Sego (15), Sate Pentol (7), Milo Panas (3), Chocolatos Es (2), es teh (1), Milo Es (5), Ceker (1), Rempelo ati (3), Wedang Jahe (1), Chocolatos Panas (1)"
+347,2026-07-06 23:42,Tunai,12000,Sate Usus (4)
+346,2026-07-06 23:10,Tunai,10000,"All Sachet Dingin (1), Rempelo ati (1)"
+345,2026-07-06 23:02,Tunai,2000,Ceker (1)
+344,2026-07-06 22:52,Tunai,24000,"Susu Anget (1), Mie Goreng (1), Tempura (2), Tempe Bacem (1), Tahu Bacem (1), Teh Panas (1)"
+343,2026-07-06 22:41,Tunai,19000,"Sate Usus (2), Sate Pentol (3), Tempura (2)"
+342,2026-07-06 22:35,Tunai,21000,"Kopi Hitam (1), Tahu Bacem (2), Rempelo ati (2), Mie Goreng (1)"
+341,2026-07-06 22:20,Tunai,10000,Kopi Hitam (2)
+340,2026-07-06 21:55,Tunai,18000,All Sachet Panas (3)
+339,2026-07-06 20:56,Tunai,3000,Sate Usus (1)
+338,2026-07-06 20:55,Tunai,22000,"Sate Usus (1), Sate Pentol (1), Sate Telor Puyuh (1), Rempelo ati (1), Susu Jahe (1)"
+337,2026-07-06 20:41,Tunai,16000,"Nasi Kucing / Sego (4), Ceker (1), Tempura (1)"
+336,2026-07-06 20:29,Tunai,29000,"Sate Telor Puyuh (5), All Sachet Dingin (2)"
+335,2026-07-06 20:07,Tunai,10000,Susu Jahe (1)
+334,2026-07-06 19:51,Tunai,49000,"Nasi Kucing / Sego (8), Sate Usus (2), Ceker (4), All Sachet Dingin (1), Teh Panas (1)"
+333,2026-07-06 19:50,Tunai,46000,"Mie Goreng (2), Telur rebus (1), All Sachet Panas (1), Kopi Hitam (1), Sate Telor Puyuh (2), Rempelo ati (2), Tempura (2), Teh Panas (1)"
+332,2026-07-06 19:47,Tunai,19000,"Kopi Hitam (1), All Sachet Dingin (2)"
+331,2026-07-06 19:30,Tunai,10000,"Ceker (2), Nasi Kucing / Sego (2)"
+330,2026-07-05 23:56,QRIS,31000,"Sate Pentol (2), Tempura Bintang (2), Sate Usus (2), Kopi Hitam (1), All Sachet Panas (1), Teh Panas (1)"
+329,2026-07-05 23:55,Tunai,7000,All Sachet Dingin (1)
+328,2026-07-05 23:55,Tunai,14000,All Sachet Dingin (2)
+327,2026-07-05 23:10,Tunai,20000,"Wedang Uwuh (1), Kopi Hitam (1), es teh (1)"
+326,2026-07-05 23:09,Tunai,5000,Kopi Hitam (1)
+325,2026-07-05 22:38,Tunai,17000,"Ceker (3), Tempura Bintang (1), Sate Telor Puyuh (3)"
+324,2026-07-05 22:38,QRIS,9000,"All Sachet Panas (1), Sate Telor Puyuh (1)"
+323,2026-07-05 22:24,Tunai,7000,All Sachet Dingin (1)
+322,2026-07-05 22:24,QRIS,10000,"es teh (1), Krupuk (2)"
+320,2026-07-05 21:48,Tunai,7000,All Sachet Dingin (1)
+319,2026-07-05 21:46,QRIS,5000,es teh (1)
+318,2026-07-05 21:45,Tunai,27000,"All Sachet Panas (1), sachet panas gede (1), Sate Usus (1), Rempelo ati (2), Tempura Bintang (1), Tahu Bacem (1)"
+317,2026-07-05 21:34,Tunai,46000,"Tempura (2), Tempura Bintang (3), Scallop putih (2), Sate Usus (2), Rempelo ati (2), Sate Pentol (2), All Sachet Dingin (2)"
+315,2026-07-05 20:40,QRIS,23000,"es teh (1), Sate Telor Puyuh (6)"
+314,2026-07-05 20:21,Tunai,27000,"Scallop putih (7), Tempura (3), All Sachet Dingin (1)"
+313,2026-07-05 20:20,Tunai,25000,"Nasi Kucing / Sego (4), Sate Telor Puyuh (2), Sate Usus (1), Scallop putih (1), Tempura Bintang (1)"
+312,2026-07-05 20:17,Tunai,17000,"Tempura (2), Tempura Bintang (2), Scallop putih (1), All Sachet Dingin (1)"
+311,2026-07-05 20:16,QRIS,36000,"All Sachet Dingin (2), Sate Usus (2), Sate Telor Puyuh (2), Tempura Bintang (2), Nasi Kucing / Sego (2)"
+310,2026-07-05 20:07,Tunai,43000,"Kopi Hitam (1), All Sachet Panas (3), Tempura (2), Tempura Bintang (2), Scallop putih (2), Ceker (4)"
+309,2026-07-05 19:52,Tunai,24000,"Ceker (4), Sate Telor Puyuh (3), All Sachet Dingin (1)"
+308,2026-07-05 19:52,Tunai,13000,"Tempura (1), Tempura Bintang (1), Sate Usus (1), Sate Pentol (2)"
+307,2026-07-05 19:48,Tunai,19000,"Scallop putih (1), Sate Pentol (2), Sate Telor Puyuh (1), Sate Usus (1), Rempelo ati (1), Tempura (1)"
+306,2026-07-05 19:44,QRIS,37000,"Chocolatos Panas (2), All Sachet Dingin (1), Scallop putih (1), Sate Pentol (1), Tempura (1), Sate Usus (1), Tempura Bintang (1), Rempelo ati (1), Sate Telor Puyuh (1)"
+305,2026-07-05 19:24,Tunai,32000,"Tempe Bacem (1), Tahu Bacem (1), Ceker (3), Sate Usus (1), Nasi Kucing / Sego (3), es teh (2)"
+304,2026-07-05 18:04,Tunai,5000,Kopi Hitam (1)
+299,2026-07-04 23:27,Tunai,10000,Es Teh Tarik (1)
+302,2026-07-04 23:26,Tunai,12000,"All Sachet Dingin (1), es teh (1)"
+301,2026-07-04 23:24,QRIS,10000,Krupuk (4)
+300,2026-07-04 23:24,Tunai,25000,"Kepala / ndas (5), Es Teh Tarik (1)"
+298,2026-07-04 22:51,QRIS,74000,"Sate Usus (6), Ceker (7), Sate Pentol (3), Nasi Kucing / Sego (2), Mie Bangladesh (1), Sate Telor Puyuh (2), Rempelo ati (2), Krupuk (2)"
+297,2026-07-04 22:46,Tunai,47500,"Sate Pentol (8), Sate Telor Puyuh (1), Rempelo ati (2), All Sachet Panas (2), Krupuk (1)"
+296,2026-07-04 22:15,Tunai,5500,"Sate Usus (1), Krupuk (1)"
+295,2026-07-04 21:57,Tunai,41000,"Sate Usus (2), Sate Pentol (3), Sate Telor Puyuh (2), All Sachet Dingin (2), All Sachet Panas (1)"
+294,2026-07-04 21:56,Tunai,57000,"Sate Usus (4), Sate Telor Puyuh (1), Nasi Kucing / Sego (4), Kopi Susu Racik (1), Krupuk (4), es kopi susu (1), es teh (1)"
+293,2026-07-04 21:51,Tunai,69000,"Sate Pentol (2), Sate Usus (2), Sate Telor Puyuh (1), Kepala / ndas (2), Ceker (1), es teh (2), Teh Panas (1), Kopi Hitam (1), Krupuk (6), Nasi Kucing / Sego (4)"
+292,2026-07-04 21:49,Tunai,5000,Krupuk (2)
+291,2026-07-04 20:28,Tunai,20000,"Sate Usus (2), Sate Telor Puyuh (2), Sate Pentol (2), Ceker (1)"
+290,2026-07-04 20:13,Tunai,28000,"Sate Telor Puyuh (6), es teh (2)"
+288,2026-07-04 20:11,Tunai,20000,"Sate Usus (2), Sate Telor Puyuh (2), Sate Pentol (2), Ceker (1)"
+287,2026-07-04 20:10,QRIS,43000,"Rempelo ati (3), Sate Usus (3), Sate Telor Puyuh (1), Teh Panas (2), es teh (1), Nasi Kucing / Sego (3)"
+286,2026-07-04 20:10,Tunai,24000,"Nasi Kucing / Sego (1), Sate Pentol (5), Sate Telor Puyuh (2)"
+285,2026-07-04 20:09,QRIS,15000,"Sate Usus (2), Sate Telor Puyuh (2), Nasi Kucing / Sego (1)"
+284,2026-07-03 23:38,Tunai,22000,"Tempura Bintang (3), Scallop merah (3), All Sachet Dingin (1), Rempelo ati (1)"
+283,2026-07-03 23:09,QRIS,9000,Sate Usus (3)
+282,2026-07-03 23:01,Tunai,9000,Sate Usus (3)
+281,2026-07-03 23:01,QRIS,11000,"Nasi Kucing / Sego (2), es teh (1)"
+280,2026-07-03 21:50,Tunai,41000,"Susu Jahe (1), Wedang Uwuh (1), Tempura (1), Tempura Bintang (3), Sate Usus (2), Scallop merah (1), Krupuk (2)"
+279,2026-07-03 21:38,Tunai,30000,"Tempura Bintang (3), Scallop merah (2), Scallop putih (1), Sate Usus (3), Rempelo ati (2), Nasi Kucing / Sego (1)"
+278,2026-07-03 20:50,Tunai,16000,"Sate Usus (1), Tempura (1), Tempura Bintang (2), Kopi Susu Racik (1)"
+277,2026-07-03 20:26,Tunai,10000,"Sate Usus (2), Ceker (2)"
+276,2026-07-03 20:18,Tunai,47000,"Nasi Kucing / Sego (2), Sate Usus (2), Kepala / ndas (1), Ceker (1), Tempura (1), Tempura Bintang (2), Sate Telor Puyuh (1), Wedang Jahe (2), Krupuk (2)"
+275,2026-07-03 20:12,Tunai,20500,"wedang jahe kecil (1), Nasi Kucing / Sego (1), Sate Usus (1), Rempelo ati (1), Krupuk (3)"
+274,2026-07-03 20:08,Tunai,32000,"All Sachet Panas (2), Sate Usus (2), Ceker (2), Tempura Bintang (1), Nasi Kucing / Sego (2), Scallop putih (1)"
+273,2026-07-03 20:01,Tunai,29000,"Sate Usus (2), Sate Telor Puyuh (1), Scallop putih (2), Scallop merah (1), All Sachet Dingin (2)"
+272,2026-07-03 19:26,Tunai,7000,All Sachet Dingin (1)
+271,2026-07-03 19:11,Tunai,40000,"Ceker (5), Nasi Kucing / Sego (2), Sate Usus (2), Sate Telor Puyuh (6)"
+270,2026-07-03 18:53,QRIS,12000,Sate Telor Puyuh (4)
+269,2026-07-03 18:53,Tunai,6000,Sate Telor Puyuh (2)
+268,2026-07-03 18:52,Tunai,6000,All Sachet Panas (1)
+267,2026-07-03 18:50,Tunai,49000,"Nasi Kucing / Sego (2), Sate Usus (4), Rempelo ati (1), Kepala / ndas (1), Ceker (2), Sate Telor Puyuh (2), All Sachet Dingin (1), Wedang Jahe (1)"
+265,2026-07-01 23:58,QRIS,44500,"Sate Usus (4), Scallop merah (2), Tempura Bintang (1), Tempura (2), Nasi Kucing / Sego (3), Teh Panas (1), All Sachet Dingin (1), Krupuk (1)"
+263,2026-07-01 23:32,Tunai,20000,"es teh (1), Sate Telor Puyuh (4), Sate Usus (1)"
+266,2026-07-01 23:28,Tunai,33000,"Tempura (10), Sate Usus (1), Sate Telor Puyuh (1), All Sachet Dingin (1)"
+262,2026-07-01 23:22,Tunai,7500,Krupuk (3)
+261,2026-07-01 23:14,QRIS,16000,"Susu Jahe (1), Sate Usus (2)"
+260,2026-07-01 21:48,Tunai,2500,Krupuk (1)
+259,2026-07-01 21:47,Tunai,26000,"Sate Usus (3), Sate Telor Puyuh (1), Nasi Kucing / Sego (3), es teh (1)"
+258,2026-07-01 21:20,Tunai,6000,"Sate Usus (1), Sate Telor Puyuh (1)"
+257,2026-07-01 19:26,Tunai,14000,Kopi Susu Racik (2)
+256,2026-07-01 18:28,Tunai,27500,"Chocolatos Es (2), Tempura (1), Tempura Bintang (1), Scallop merah (1), Krupuk (3)"
+255,2026-06-30 23:25,Tunai,3000,Peyek (2)
+254,2026-06-30 23:25,Tunai,5000,"Sate Usus (1), Tempura (1)"
+253,2026-06-30 23:01,Tunai,8000,Wedang Jahe (1)
+252,2026-06-30 22:47,QRIS,6000,Sate Usus (2)
+251,2026-06-30 22:43,Tunai,11000,"Es Teh Tarik (1), Sate Usus (1)"
+250,2026-06-30 22:37,Tunai,8000,Wedang Jahe (1)
+249,2026-06-30 22:31,Tunai,3000,Sate Usus (1)
+248,2026-06-30 22:25,Tunai,18000,"All Sachet Panas (1), Sate Usus (2), Tempura Bintang (1), Scallop putih (1), Scallop merah (1)"
+247,2026-06-30 22:14,Tunai,35000,"Sate Usus (2), Scallop merah (2), Scallop putih (4), Tempura (3), Tempura Bintang (2), All Sachet Dingin (1)"
+246,2026-06-30 22:04,Tunai,25000,"Sate Usus (2), Nasi Kucing / Sego (1), Scallop putih (2), All Sachet Panas (2)"
+245,2026-06-30 21:57,Tunai,16000,"Sate Usus (4), Scallop merah (2)"
+244,2026-06-30 21:11,QRIS,76500,"Tempura Bintang (5), Tempura (4), Scallop putih (3), Sate Usus (5), Sate Telor Puyuh (1), All Sachet Panas (2), Scallop merah (2), Chocolatos Panas (1), Krupuk (5)"
+243,2026-06-30 20:37,Tunai,6000,Sate Usus (2)
+242,2026-06-30 20:35,Tunai,2500,Krupuk (1)
+241,2026-06-30 20:30,Tunai,19500,"Nasi Kucing / Sego (1), Tempura (2), Krupuk (1), Wedang Uwuh (1)"
+240,2026-06-30 20:28,Tunai,5000,Kopi Hitam (1)
+239,2026-06-30 20:25,Tunai,9000,Sate Usus (3)
+238,2026-06-30 20:07,Tunai,6000,Sate Usus (2)
+237,2026-06-30 19:26,Tunai,66000,"All Sachet Dingin (1), All Sachet Panas (2), Tempura (6), Sate Usus (4), Sate Telor Puyuh (2), Nasi Kucing / Sego (4), Krupuk (2)"
+236,2026-06-30 19:23,Tunai,25000,"Sate Usus (3), Sate Telor Puyuh (3), Krupuk (1), Peyek (3)"
+235,2026-06-30 19:03,Tunai,56000,"Sate Usus (4), Tempura (1), Sate Telor Puyuh (6), Scallop putih (1), Tempura Bintang (1), Scallop merah (1), All Sachet Panas (2), Nasi Kucing / Sego (2)"
+234,2026-06-30 18:42,Tunai,10000,Kopi Hitam (2)
+233,2026-06-30 18:41,Tunai,28000,"Sate Usus (4), Sate Telor Puyuh (2), Tempura Bintang (2), Nasi Kucing / Sego (2)"
+232,2026-06-29 23:55,Tunai,16000,"Tempura (3), Teh Susu (1), Scallop merah (1)"
+231,2026-06-29 23:54,Tunai,26000,"Sate Usus (7), Kopi Hitam (1)"
+230,2026-06-29 23:52,Tunai,18000,"Nasi Kucing / Sego (2), All Sachet Dingin (1), Kopi Hitam (1)"
+229,2026-06-29 23:52,Tunai,24000,Es Teh Tarik (3)
+228,2026-06-29 23:00,Tunai,25000,"All Sachet Dingin (1), Sate Telor Puyuh (6)"
+227,2026-06-29 22:31,Tunai,7000,Chocolatos Es (1)
+226,2026-06-29 22:21,Tunai,29000,"Sate Usus (3), Scallop putih (4), Scallop merah (2), Tempura (2), Tempura Bintang (2)"
+225,2026-06-29 21:56,Tunai,13000,"All Sachet Dingin (1), Sate Telor Puyuh (2)"
+224,2026-06-29 21:44,QRIS,18000,"Kopi Hitam (1), Tempura (5), Sate Usus (1)"
+222,2026-06-29 21:41,Tunai,5000,Kopi Hitam (1)
+221,2026-06-29 21:37,Tunai,10000,"wedang jahe kecil (1), Susu Anget (1)"
+220,2026-06-29 21:36,Tunai,2000,Tempura (1)
+219,2026-06-29 20:32,Tunai,30000,"Sate Usus (4), Sate Telor Puyuh (2), Nasi Kucing / Sego (4)"
+218,2026-06-29 20:23,Tunai,10000,"Teh Panas (1), All Sachet Panas (1)"
+217,2026-06-29 20:04,Tunai,10000,Susu Jahe (1)
+216,2026-06-29 20:01,Tunai,52000,"Nasi Kucing / Sego (6), Sate Usus (3), Sate Telor Puyuh (3), Tempura (3), Krupuk (4)"
+215,2026-06-29 20:00,Tunai,9000,"Sate Usus (2), Nasi Kucing / Sego (1)"
+214,2026-06-29 19:59,Tunai,12000,"Sate Usus (2), Tempura (2), Scallop putih (1)"
+213,2026-06-29 19:14,Tunai,18000,"Tempura (2), Scallop merah (1), Tempura Bintang (2), Sate Usus (1), Sate Telor Puyuh (1), Scallop putih (1)"
+212,2026-06-29 19:14,Tunai,13000,"Tempura Bintang (2), Scallop putih (2), Sate Telor Puyuh (1), Tempura (1)"
+211,2026-06-29 19:13,Tunai,18000,"Sate Usus (2), Tempura Bintang (1), Scallop putih (1), Tempura (1), Sate Telor Puyuh (2)"
+210,2026-06-29 18:50,Tunai,5000,Kopi Hitam (1)
+209,2026-06-28 23:41,Tunai,7000,"Tempura (1), Sate Usus (1), Tempura Bintang (1)"
+208,2026-06-28 23:32,Tunai,56000,"Tempura Bintang (2), Tempura (4), Sate Usus (2), Scallop putih (2), Scallop merah (1), All Sachet Dingin (3), All Sachet Panas (1), Kopi Hitam (1)"
+207,2026-06-28 22:44,QRIS,52000,"Sate Usus (5), Tempura (2), Mie Goreng (1), All Sachet Dingin (1), All Sachet Panas (1), Susu Jahe (1), Tempura Bintang (2)"
+206,2026-06-28 22:39,Tunai,10000,Susu Jahe (1)
+205,2026-06-28 22:33,Tunai,16000,"Nasi Kucing / Sego (2), Sate Usus (1), Kopi Susu Racik (1)"
+204,2026-06-28 22:08,Tunai,3000,Sate Usus (1)
+203,2026-06-28 21:49,Tunai,10000,Susu Jahe (1)
+202,2026-06-28 21:47,Tunai,32000,"Kopi Hitam (1), All Sachet Panas (1), Mie Goreng (1), Sate Usus (3), Nasi Kucing / Sego (2)"
+201,2026-06-28 20:45,Tunai,11000,"Nasi Kucing / Sego (1), Wedang Jahe (1)"
+200,2026-06-28 20:45,Tunai,13000,"Kopi Hitam (1), Wedang Jahe (1)"
+199,2026-06-28 20:45,Tunai,21000,"Sate Usus (2), Sate Telor Puyuh (1), Tempura (1), Tempura Bintang (1), Scallop putih (1), All Sachet Panas (1)"
+198,2026-06-28 20:44,Tunai,2500,Krupuk (1)
+197,2026-06-28 20:44,Tunai,32000,"Kopi Hitam (1), All Sachet Panas (1), Sate Usus (3), Tempura (2), Tempura Bintang (2), Scallop putih (2)"
+196,2026-06-28 20:42,Tunai,21000,"es teh (1), Kopi Hitam (1), Sate Telor Puyuh (2), Tempura (1), Sate Usus (1)"
+195,2026-06-28 20:42,Tunai,37000,"Nasi Kucing / Sego (5), Sate Usus (2), Sate Telor Puyuh (3), Tempura (1), Kopi Hitam (1)"
+194,2026-06-28 20:41,Tunai,20000,"Sate Usus (2), Sate Telor Puyuh (2), Tempura Bintang (2), Tempura (2)"
+193,2026-06-28 20:41,QRIS,27000,"Sate Usus (1), Sate Telor Puyuh (1), Scallop merah (1), Tempura Bintang (1), All Sachet Panas (2), Krupuk (2)"
+192,2026-06-28 20:39,Tunai,27000,"Sate Usus (1), Sate Telor Puyuh (1), Scallop merah (1), Tempura Bintang (1), All Sachet Panas (2), Krupuk (2)"
+190,2026-06-28 20:37,Tunai,30000,"Nasi Kucing / Sego (2), Sate Usus (4), Sate Telor Puyuh (4)"
+189,2026-06-28 20:35,Tunai,49000,"Krupuk (6), Sate Usus (3), Tempura Bintang (1), Scallop merah (1), Sate Telor Puyuh (1), All Sachet Dingin (2), Teh Panas (1)"
+185,2026-06-27 23:47,Tunai,10000,"Sate Usus (1), Sate Telor Puyuh (1), Tempura (1), Tempura Bintang (1)"
+184,2026-06-27 23:33,Tunai,15000,"Tempura Bintang (2), Tempura (1), Sate Usus (1), All Sachet Panas (1)"
+183,2026-06-27 23:12,Tunai,11000,"Nasi Kucing / Sego (2), Krupuk (2)"
+182,2026-06-27 22:56,QRIS,17500,"wedang jahe kecil (1), All Sachet Panas (1), Krupuk (3)"
+181,2026-06-27 22:47,Tunai,4000,wedang jahe kecil (1)
+180,2026-06-27 22:47,Tunai,7000,All Sachet Dingin (1)
+179,2026-06-27 22:41,Tunai,39000,"Scallop putih (3), Tempura (2), Tempura Bintang (2), Scallop merah (1), Sate Usus (2), Nasi Kucing / Sego (1), All Sachet Dingin (2)"
+178,2026-06-27 22:11,Tunai,12000,"wedang jahe kecil (1), Sate Usus (1), Kopi Hitam (1)"
+177,2026-06-27 21:57,Tunai,22000,"Scallop putih (2), Scallop merah (1), Tempura Bintang (1), Kopi Susu Racik (1), All Sachet Dingin (1)"
+176,2026-06-27 21:54,Tunai,42000,"Sate Usus (2), Sate Telor Puyuh (2), Nasi Kucing / Sego (2), Wedang Uwuh (2), Teh Panas (1)"
+188,2026-06-27 21:21,Tunai,13000,"Sate Usus (1), Sate Telor Puyuh (1), Tempura Bintang (1), Kopi Hitam (1)"
+187,2026-06-27 21:16,Tunai,15000,"All Sachet Panas (2), Sate Usus (1)"
+186,2026-06-27 21:04,Tunai,57000,"Kopi Hitam (1), All Sachet Dingin (3), All Sachet Panas (1), Tempura (2), Tempura Bintang (1), Scallop merah (1), Sate Telor Puyuh (4), Krupuk (2)"
+175,2026-06-27 20:44,Tunai,21000,"Kopi Hitam (3), All Sachet Panas (1)"
+174,2026-06-27 20:44,Tunai,5000,Kopi Hitam (1)
+173,2026-06-27 20:44,Tunai,10000,Kopi Hitam (2)
+172,2026-06-27 20:43,Tunai,22000,"Nasi Kucing / Sego (1), Sate Usus (4), Kopi Susu Racik (1)"
+171,2026-06-26 22:54,Tunai,23000,"Scallop putih (3), Scallop merah (1), Tempura (1), Sate Usus (1), Nasi Kucing / Sego (1), All Sachet Dingin (1)"
+170,2026-06-26 22:44,Tunai,5000,Kopi Hitam (1)
+169,2026-06-26 22:14,Tunai,12000,"Kopi Hitam (1), All Sachet Dingin (1)"
+168,2026-06-26 22:11,Tunai,22000,"Tempura (2), Scallop putih (2), Scallop merah (1), All Sachet Panas (2)"
+167,2026-06-26 22:05,QRIS,6000,Sate Telor Puyuh (2)
+166,2026-06-26 21:46,Tunai,28000,"Sate Usus (4), Sate Telor Puyuh (2), Scallop merah (1), Kopi Hitam (1), Nasi Kucing / Sego (1)"
+165,2026-06-26 21:31,Tunai,16000,"Tempura Bintang (1), Scallop merah (1), Scallop putih (3), Sate Usus (1), Sate Telor Puyuh (1)"
+164,2026-06-26 21:22,Tunai,5000,es teh (1)
+163,2026-06-26 21:14,Tunai,15000,"Nasi Kucing / Sego (2), Sate Telor Puyuh (3)"
+162,2026-06-26 19:49,Tunai,15000,"Nasi Kucing / Sego (2), Sate Telor Puyuh (3)"
+151,2026-06-26 19:22,Tunai,12000,"Nasi Kucing / Sego (2), Sate Usus (2)"
+150,2026-06-26 19:22,Tunai,5000,Kopi Hitam (1)
+149,2026-06-26 19:21,Tunai,12000,"Nasi Kucing / Sego (2), Sate Usus (1), Sate Telor Puyuh (1)"
+148,2026-06-26 19:21,QRIS,32000,"Sate Usus (2), Sate Telor Puyuh (3), Tempura (2), All Sachet Dingin (1), Wedang Jahe (1)"
+161,2026-06-25 19:34,Tunai,45000,"Nasi Kucing / Sego (7), Sate Telor Puyuh (4), Sate Usus (4)"
+160,2026-06-25 19:33,Tunai,13000,"Wedang Jahe (1), Teh Panas (1), Sate Telor Puyuh (1)"
+159,2026-06-25 19:32,QRIS,34000,"All Sachet Dingin (2), Sate Telor Puyuh (4), Tempura Bintang (3), Tempura (1)"
+158,2026-06-25 19:32,Tunai,40000,"All Sachet Panas (2), Sate Usus (5), Sate Telor Puyuh (3), Tempura (2)"
+157,2026-06-25 19:31,Tunai,26000,"Wedang Jahe (2), All Sachet Dingin (2)"
+156,2026-06-25 19:30,Tunai,10000,"Sate Telor Puyuh (2), Tempura (1), Tempura Bintang (1)"
+155,2026-06-25 19:29,Tunai,21000,"All Sachet Panas (1), Nasi Kucing / Sego (2), Sate Usus (1), Tempura (1), Teh Panas (1)"
+154,2026-06-25 19:28,Tunai,19000,"Kopi Hitam (1), Tempura (2), Scallop putih (1), Tempura Bintang (1), Sate Usus (2)"
+153,2026-06-25 19:27,Tunai,27000,"All Sachet Dingin (2), Tempura (4), Scallop putih (1), Nasi Kucing / Sego (1)"
+152,2026-06-25 19:25,Tunai,6000,All Sachet Panas (1)
+147,2026-06-24 23:48,Tunai,4000,"Scallop merah (1), Tempura Bintang (1)"
+146,2026-06-24 23:23,Tunai,17000,"All Sachet Dingin (1), Wedang Uwuh (1)"
+145,2026-06-24 23:00,Tunai,9000,"Sate Usus (1), Sate Telor Puyuh (2)"
+144,2026-06-24 22:25,Tunai,6000,"Tempura Bintang (2), Krupuk (1)"
+143,2026-06-24 22:24,QRIS,16000,"wedang watuk pilek (1), Sate Usus (2)"
+142,2026-06-24 20:24,QRIS,92000,"Kopi Susu Racik (1), Sate Usus (4), Sate Telor Puyuh (3), Kopi Hitam (1), jeruk panas (3), wedang watuk pilek (2), es jahe (1), Tempura (2), Scallop putih (1), Scallop merah (1), Tempura Bintang (2)"
+141,2026-06-24 20:24,QRIS,37000,"Tempura Bintang (2), Sate Usus (4), Nasi Kucing / Sego (1), Sate Telor Puyuh (2), All Sachet Dingin (1), es teh (1)"
+140,2026-06-24 20:08,Tunai,6000,Nasi Kucing / Sego (2)
+139,2026-06-24 20:03,Tunai,25000,"Sate Usus (4), Tempura (2), Scallop putih (1), Tempura Bintang (1), Scallop merah (1), Nasi Kucing / Sego (1)"
+138,2026-06-24 20:00,Tunai,30000,"All Sachet Panas (2), Susu Jahe (1), Tempura Bintang (1), Scallop putih (1), Tempura (3)"
+137,2026-06-24 17:57,Tunai,16000,"Kopi Susu Racik (1), Nasi Kucing / Sego (1), Sate Usus (2)"
+136,2026-06-24 17:51,Tunai,10000,Kopi Hitam (2)
+135,2026-06-23 23:24,QRIS,42000,"Nasi Kucing / Sego (3), Sate Telor Puyuh (3), Sate Usus (2), All Sachet Dingin (1), Kopi Susu Racik (1), Scallop putih (1), Scallop merah (1)"
+134,2026-06-23 23:17,QRIS,4000,wedang jahe kecil (1)
+132,2026-06-23 23:15,QRIS,21000,All Sachet Dingin (3)
+131,2026-06-23 20:28,Tunai,20000,"Nasi Kucing / Sego (2), Sate Telor Puyuh (2), Tempura (1), Wedang Jahe (1)"
+130,2026-06-23 20:27,Tunai,27000,"Sate Usus (2), Scallop merah (2), Scallop putih (2), Wedang Jahe (1), Teh Panas (1), Nasi Kucing / Sego (1)"
+129,2026-06-23 19:50,Tunai,5000,Kopi Hitam (1)
+128,2026-06-23 19:19,Tunai,15000,"Sate Usus (3), Sate Telor Puyuh (2)"
+127,2026-06-23 19:07,Tunai,5000,Kopi Hitam (1)
+126,2026-06-23 18:45,Tunai,8000,"Wedang Jahe (1), Tempura (1)"
+122,2026-06-22 23:59,QRIS,9000,"Sate Usus (1), Wedang Jahe (1)"
+121,2026-06-22 23:58,Tunai,19000,"Sate Usus (2), Tempura (1), Scallop putih (1), Nasi Kucing / Sego (1), All Sachet Panas (1)"
+120,2026-06-22 23:57,Tunai,6000,All Sachet Panas (1)
+124,2026-06-22 23:11,Tunai,7000,All Sachet Dingin (1)
+119,2026-06-22 23:04,Tunai,18000,"All Sachet Dingin (1), Kopi Hitam (1), Nasi Kucing / Sego (2)"
+118,2026-06-22 22:45,QRIS,16000,"Sate Telor Puyuh (4), Tempura (2)"
+117,2026-06-22 22:28,Tunai,27000,"Sate Usus (2), Tempura (2), Scallop putih (1), Scallop merah (1), All Sachet Dingin (1), All Sachet Panas (1)"
+116,2026-06-22 21:56,Tunai,10000,"Nasi Kucing / Sego (1), All Sachet Dingin (1)"
+115,2026-06-22 20:08,Tunai,13000,"Sate Usus (2), Tempura (1), Nasi Kucing / Sego (1), Krupuk (1)"
+114,2026-06-22 19:50,Tunai,15000,"Sate Telor Puyuh (3), Sate Usus (2)"
+113,2026-06-22 19:49,QRIS,18000,"Scallop putih (1), Scallop merah (1), Nasi Kucing / Sego (1), es teh (1), Sate Telor Puyuh (2)"
+112,2026-06-21 01:10,Tunai,11000,"Kopi Hitam (1), All Sachet Panas (1)"
+111,2026-06-21 00:53,Tunai,12000,All Sachet Panas (2)
+110,2026-06-21 00:35,Tunai,14000,Chocolatos Es (2)
+109,2026-06-21 00:20,Tunai,12000,All Sachet Panas (2)
+108,2026-06-21 00:13,Tunai,6000,All Sachet Panas (1)
+107,2026-06-20 22:55,Tunai,10000,"Scallop merah (1), Tempura Bintang (1), Tempura (2), Scallop putih (1)"
+106,2026-06-20 22:54,Tunai,7000,Milo Es (1)
+105,2026-06-20 22:49,Tunai,33000,"Scallop merah (2), Scallop putih (2), Tempura (2), All Sachet Panas (1), Sosis jumbo (1), Sate Telor Puyuh (1), Tempura Bintang (1)"
+104,2026-06-20 22:45,Tunai,10000,Kopi Hitam (2)
+101,2026-06-20 22:37,Tunai,12000,All Sachet Panas (2)
+100,2026-06-20 22:20,Tunai,15000,Kopi Hitam (3)
+99,2026-06-20 22:18,Tunai,4000,"Tempura (1), Tempura Bintang (1)"
+98,2026-06-20 22:15,Tunai,10000,"Tempura Bintang (2), Scallop putih (1), Scallop merah (1), Tempura (1)"
+97,2026-06-20 21:50,Tunai,34000,"Scallop merah (1), Scallop putih (1), Tempura Bintang (2), Tempura (1), All Sachet Panas (4)"
+96,2026-06-20 21:40,QRIS,12000,All Sachet Panas (2)
+95,2026-06-20 21:25,Tunai,6000,All Sachet Panas (1)
+94,2026-06-20 21:25,Tunai,12000,All Sachet Panas (2)
+93,2026-06-20 21:24,Tunai,10000,Kopi Hitam (2)
+92,2026-06-20 21:22,Tunai,5000,Kopi Hitam (1)
+91,2026-06-20 21:21,Tunai,14000,Milo Es (2)
+90,2026-06-20 21:01,Tunai,15000,"Sate Usus (2), Sate Telor Puyuh (3)"
+89,2026-06-20 20:20,Tunai,25000,"Scallop merah (3), Sate Telor Puyuh (1), Tempura Bintang (2), Tempura (4), Scallop putih (2)"
+88,2026-06-20 20:15,Tunai,30000,"Sate Usus (5), Sate Telor Puyuh (5)"
+86,2026-06-20 20:13,Tunai,10000,"Sate Usus (2), Tempura Bintang (1), Tempura (1)"
+84,2026-06-20 18:48,Tunai,19000,"Scallop putih (2), Scallop merah (2), Tempura (2), Tempura Bintang (2), Sate Telor Puyuh (1)"
+83,2026-06-20 18:30,Tunai,6000,Nasi Kucing / Sego (2)
+82,2026-06-20 18:11,Tunai,56000,"Nasi Kucing / Sego (5), Sate Usus (7), Sosis jumbo (2)"
+81,2026-06-20 18:10,Tunai,36000,"Nasi Kucing / Sego (5), Sate Usus (3), Sate Telor Puyuh (4)"
+79,2026-06-19 23:55,Tunai,15000,"Sate Telor Puyuh (2), Nasi Kucing / Sego (3)"
+77,2026-06-19 22:59,Tunai,27000,"Sate Usus (7), Scallop putih (3)"
+76,2026-06-19 22:45,Tunai,8000,"Tempura Bintang (1), Tempura (1), Scallop merah (1), Scallop putih (1)"
+75,2026-06-19 22:45,Tunai,6000,Milo Panas (1)
+74,2026-06-19 22:40,Tunai,18000,"Tempura (2), Sate Usus (1), Tempura Bintang (2), Milo Es (1)"
+73,2026-06-19 22:10,Tunai,81000,"Scallop putih (3), Sate Telor Puyuh (5), Sate Usus (7), Scallop merah (4), Tempura (5), Tempura Bintang (1), Milo Es (2), Kopi Hitam (1)"
+72,2026-06-19 21:53,Tunai,5000,"Sate Telor Puyuh (1), Tempura (1)"
+71,2026-06-19 21:33,Tunai,10000,es teh (2)
+70,2026-06-19 21:32,QRIS,15000,"Sate Usus (3), Sate Telor Puyuh (2)"
+69,2026-06-19 21:31,Tunai,12000,"Sosis jumbo (1), Tempura (1)"
+68,2026-06-19 20:30,Tunai,10000,Sosis jumbo (1)
+67,2026-06-19 20:21,Tunai,12000,"Tempura (1), Sate Usus (2), Scallop merah (1), Tempura Bintang (1)"
+66,2026-06-19 20:07,Tunai,9000,"Nasi Kucing / Sego (2), Sate Usus (1)"
+65,2026-06-19 19:31,Tunai,26000,"Sosis jumbo (2), Tempura Bintang (1), Tempura (1), Scallop merah (1)"
+64,2026-06-19 19:21,Tunai,10000,Tempura (5)
+63,2026-06-18 22:38,Tunai,20000,"Scallop merah (1), Tempura Bintang (1), Tempura (1), Scallop putih (1), Sate Usus (4)"
+62,2026-06-18 22:26,Tunai,26000,"Sate Telor Puyuh (5), Sate Pentol (1), Tempura (4)"
+61,2026-06-18 22:25,Tunai,42000,"Sate Usus (4), Sate Telor Puyuh (5), Nasi Kucing / Sego (5)"
+60,2026-06-18 22:13,Tunai,32000,"Susu Jahe (2), Nasi Kucing / Sego (1), Sate Usus (2), Scallop merah (1), Tempura Bintang (1), Sate Telor Puyuh (1)"
+59,2026-06-18 22:07,QRIS,12000,"Sate Telor Puyuh (2), Sate Usus (1), Nasi Kucing / Sego (1)"
+58,2026-06-18 21:31,Tunai,41000,"Susu Jahe (1), Wedang Jahe (1), Nasi Kucing / Sego (4), Sate Telor Puyuh (4), Sate Usus (1)"
+57,2026-06-18 21:30,Tunai,6000,Wedang Jahe (1)
+56,2026-06-18 21:29,QRIS,28000,"Wedang Jahe (1), Tempura Bintang (3), Sate Telor Puyuh (3), Tempura (2), Sate Usus (1)"
+55,2026-06-18 21:01,Tunai,38000,"Nasi Kucing / Sego (2), Sate Telor Puyuh (2), Sate Pentol (2), Tempura Bintang (2), Scallop putih (1), Scallop merah (1), All Sachet Panas (2)"
+54,2026-06-18 19:57,Tunai,35000,"Tempura Bintang (3), Scallop putih (3), Scallop merah (2), Tempura (3), All Sachet Dingin (1), All Sachet Panas (1)"
+53,2026-06-18 19:18,Tunai,5000,Kopi Hitam (1)
+52,2026-06-18 19:17,Tunai,6000,"Sate Usus (1), Sate Telor Puyuh (1)"
+51,2026-06-17 23:23,Tunai,10000,"Wedang Jahe (1), Krupuk (2)"
+50,2026-06-17 23:22,Tunai,7000,"Krupuk (2), Sate Usus (1)"
+49,2026-06-17 23:13,Tunai,27000,"Wedang Jahe (1), Kopi Hitam (1), Krupuk (3), Mie Spontan (2)"
+48,2026-06-17 22:23,Tunai,17000,"Sate Usus (2), Sate Telor Puyuh (2), Kopi Hitam (1)"
+47,2026-06-17 22:23,Tunai,13000,"Nasi Kucing / Sego (1), Sate Usus (2), Teh Panas (1)"
+46,2026-06-17 22:23,Tunai,46000,"Sate Telor Puyuh (3), Nasi Kucing / Sego (4), Teh Panas (1), Kopi Hitam (1), Wedang Jahe (1), Sate Usus (2), Tempe Bacem (1), Tahu Bacem (1)"
+44,2026-06-17 21:14,Tunai,13000,"Sate Usus (1), Sate Telor Puyuh (1), Nasi Kucing / Sego (1), Teh Panas (1)"
+43,2026-06-17 21:00,Tunai,10000,Kopi Hitam (2)
+42,2026-06-17 20:57,Tunai,12000,"Sate Telor Puyuh (2), Nasi Kucing / Sego (2)"
+41,2026-06-17 20:35,Tunai,9000,Sate Telor Puyuh (3)
+40,2026-06-17 20:27,Tunai,26000,"Tempe Bacem (2), Tempura (3), Kopi Hitam (2), Nasi Kucing / Sego (2)"
+39,2026-06-17 20:11,Tunai,8000,"Kopi Hitam (1), Nasi Kucing / Sego (1)"
+38,2026-06-17 20:11,Tunai,20000,"Sate Pentol (1), Sate Telor Puyuh (2), Sate Usus (1), Nasi Kucing / Sego (1), Kopi Hitam (1)"
+37,2026-06-17 20:10,QRIS,6000,"Sate Telor Puyuh (1), Sate Usus (1)"
+35,2026-06-17 20:09,Tunai,5000,Kopi Hitam (1)
+34,2026-06-17 20:08,Tunai,25000,Kopi Hitam (5)
+33,2026-06-16 23:25,QRIS,52000,"Sate Usus (5), Sate Telor Puyuh (4), Tempura (3), Nasi Kucing / Sego (1), Kopi Hitam (1), All Sachet Dingin (1), Scallop merah (2)"
+32,2026-06-16 23:05,QRIS,15000,"Sate Usus (2), Tempura (3), Nasi Kucing / Sego (1)"
+31,2026-06-16 22:38,Tunai,29000,"Sate Usus (3), Sate Pentol (2), Tahu Bacem (2), Tempe Bacem (2), Nasi Kucing / Sego (2)"
+30,2026-06-16 21:22,Tunai,6000,"Teh Panas (1), Krupuk (1)"
+29,2026-06-16 20:57,Tunai,74000,"Sate Usus (2), Sate Telor Puyuh (3), Tempura (2), Sate Pentol (3), Scallop merah (1), Tempura Bintang (1), Milo Es (1), Milo Panas (1), Chocolatos Es (2), Nasi Kucing / Sego (3), Krupuk (3)"
+28,2026-06-16 20:52,Tunai,30000,"Scallop merah (2), Tempura Bintang (1), Scallop putih (1), Sate Usus (4), Nasi Kucing / Sego (2), Krupuk (2)"
+27,2026-06-16 20:38,Tunai,7000,All Sachet Dingin (1)
+24,2026-06-16 20:25,Tunai,39000,"Tempura (1), Scallop putih (2), Sate Pentol (1), Scallop merah (1), All Sachet Dingin (1), Teh Panas (1), Sate Telor Puyuh (1), Sate Usus (2), Tempe Bacem (1), Nasi Kucing / Sego (2)"
+23,2026-06-16 20:04,Tunai,8000,Es Teh Tarik (1)
+22,2026-06-16 19:57,Tunai,8000,Es Teh Tarik (1)
+21,2026-06-16 18:25,Tunai,18000,"Tempura (3), Tempura Bintang (2), Scallop putih (1), Sate Usus (2)"
+20,2026-06-16 18:22,Tunai,10000,Kopi Hitam (2)
+19,2026-06-16 18:22,Tunai,6000,Krupuk (3)
+18,2026-06-16 01:20,Tunai,18000,"Tempura (6), All Sachet Panas (1)"
+17,2026-06-16 01:19,Tunai,6000,All Sachet Panas (1)
+16,2026-06-16 01:19,Tunai,18000,"Nasi Kucing / Sego (2), All Sachet Panas (2)"
+15,2026-06-16 01:15,Tunai,23000,"Sate Telor Puyuh (3), Sate Pentol (2), Tempura (4)"
+14,2026-06-16 01:15,Tunai,14000,"All Sachet Dingin (1), Es Susu (1)"
+13,2026-06-16 01:14,Tunai,14000,"Tempura (3), Kopi Hitam (1), Nasi Kucing / Sego (1)"
+12,2026-06-16 01:13,Tunai,33000,"Tempura (5), All Sachet Panas (3), Kopi Hitam (1)"
+11,2026-06-16 01:12,Tunai,18000,"Sate Telor Puyuh (2), Nasi Kucing / Sego (1), All Sachet Dingin (1), Krupuk (1)"
+10,2026-06-16 01:12,QRIS,16000,"All Sachet Panas (1), Tempura (5)"
+9,2026-06-16 01:11,Tunai,38000,"Sate Usus (2), Sate Pentol (2), Tempura (5), All Sachet Dingin (1), Nasi Kucing / Sego (1), All Sachet Panas (1)"
+8,2026-06-16 01:09,Tunai,9000,"Sate Usus (2), Sate Telor Puyuh (1)"
+7,2026-06-16 01:09,Tunai,10000,Kopi Hitam (2)
+6,2026-06-16 01:07,Tunai,374000,Penjualan H6 (1)
+5,2026-06-16 01:07,Tunai,283000,Penjualan H5 (1)
+4,2026-06-16 01:07,Tunai,381000,Penjualan H4 (1)
+3,2026-06-16 01:07,Tunai,519000,Penjualan H3 (1)
+2,2026-06-16 01:06,Tunai,375000,Penjualan H2 (1)
+1,2026-06-16 01:03,Tunai,648000,Penjualan H1 (1)

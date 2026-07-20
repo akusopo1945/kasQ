@@ -177,3 +177,24 @@ body, div, header, main, aside, footer, button, p, span, h1, h2, h3, h4, input, 
 .animate-fade-in-down {
   animation: fadeInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes loadingBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-loading-bar {
+  animation: loadingBar 1.8s infinite ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+

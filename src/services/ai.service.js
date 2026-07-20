@@ -1,4 +1,27 @@
-import { GoogleGenAI } from '@google/genai';
+
+// Mapping of common speech recognition phonetic mistakes to correct terms (Angkringan specific)
+const PHONETIC_MAP = {
+  's': 'es',
+  'skala': 'scallop',
+  'khusus': 'usus',
+  'ampelo': 'rempela',
+  'rempelo': 'rempela',
+  'sego': 'nasi',
+  'ndas': 'kepala',
+  'esteh': 'es teh'
+};
+
+
+// Preprocess speech text to fix phonetic mishear errors
+export function preprocessSpeechText(text) {
+  if (!text) return '';
+  let cleaned = text.toLowerCase();
+  for (const [misheard, correct] of Object.entries(PHONETIC_MAP)) {
+    const regex = new RegExp(`\\b${misheard}\\b`, 'g');
+    cleaned = cleaned.replace(regex, correct);
+  }
+  return cleaned;
+}
 
 // Mapping of Indonesian word numbers to digits
 const INDO_NUMBERS = {
@@ -361,15 +384,18 @@ Aturan:
 
 // Main AI Service Parser (Hybrid Online-Offline)
 export async function parseCommand(text, apiKey, localProducts = [], localMaterials = []) {
+  // Preprocess text to fix common speech recognition phonetic errors (e.g. skala -> scallop)
+  const correctedText = preprocessSpeechText(text);
+
   // 1. Try local offline regex & rules parser first (ultra-fast)
-  const localResult = parseLocalCommand(text, localProducts, localMaterials);
+  const localResult = parseLocalCommand(correctedText, localProducts, localMaterials);
   if (localResult && localResult.action !== 'UNKNOWN') {
     console.log('Parsed instantly using local regex rules:', localResult);
     return localResult;
   }
 
   // 2. Try Browser Built-in On-Device AI (Gemini Nano) if available
-  const onDeviceResult = await parseWithOnDeviceAI(text, localProducts, localMaterials);
+  const onDeviceResult = await parseWithOnDeviceAI(correctedText, localProducts, localMaterials);
   if (onDeviceResult && onDeviceResult.action !== 'UNKNOWN') {
     return onDeviceResult;
   }
@@ -379,6 +405,7 @@ export async function parseCommand(text, apiKey, localProducts = [], localMateri
 
   if (isOnline && apiKey) {
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
       const prompt = `
 Kamu adalah asisten kasir pintar untuk aplikasi POS bernama KasQ.
@@ -390,7 +417,7 @@ ${JSON.stringify(localProducts)}
 Daftar bahan baku lokal di toko:
 ${JSON.stringify(localMaterials)}
 
-Perintah pengguna: "${text}"
+Perintah pengguna: "${correctedText}"
 
 Instruksi Pencocokan:
 1. Jika perintah merujuk pada penjualan barang (SALE), coba cocokkan nama barang dengan daftar produk lokal di atas. Jika mirip, gunakan nama resmi produk lokal tersebut beserta harganya. Jika tidak ada yang mirip, buat item baru dengan harga (price) 0.
@@ -398,6 +425,7 @@ Instruksi Pencocokan:
 3. Jika perintah merujuk pada hutang pelanggan atau piutang (DEBT), set action ke "DEBT". Isi "customerName", "amount", dan "type" dengan nilai "UTANG" (jika toko berutang/pengeluaran utang) atau "PIUTANG" (jika pelanggan berutang/piutang ke toko).
 4. Jika perintah merujuk pada penambahan/pembelian stok bahan baku mentah (MATERIAL), set action ke "MATERIAL". Coba cocokkan nama dengan bahan baku lokal di atas. Kembalikan properti "name" (nama bahan baku), "qty" (jumlah bahan), dan "unit" (satuan bahan seperti kg, gr, pcs).
 5. Jika tidak cocok dengan kategori mana pun, set action ke "UNKNOWN".
+6. Catatan penting: Teks perintah berasal dari input suara (speech-to-text) yang rentan salah dengar secara fonetis (misal: "skala" kemungkinan besar adalah "scallop", "khusus" adalah "usus", dll). Gunakan kecerdasanmu untuk mencocokkan kata yang salah dengar tersebut ke nama produk lokal terdekat secara semantik dan fonetis (misal "sate khusus" dicocokkan ke "Sate Usus").
 
 Kembalikan format JSON yang valid dan bersesuaian dengan skema.
 `;
@@ -456,6 +484,7 @@ export async function parseImageCommand(base64Image, apiKey, localProducts = [])
   }
 
   try {
+    const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey });
     const prompt = `
 Kamu adalah asisten kasir pintar untuk aplikasi POS bernama KasQ.

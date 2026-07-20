@@ -107,4 +107,81 @@ export async function seedTestUser() {
   }
 }
 
+export async function seedLegacyProducts(userId) {
+  const existingProducts = await db.products.where('userId').equals(userId).toArray();
+  const existingNames = new Set(existingProducts.map(p => p.name.toLowerCase()));
+  
+  const legacyProducts = [
+    { name: "Teh Panas", price: 4000 },
+    { name: "Sate Usus", price: 3000 },
+    { name: "Tempura Bintang", price: 2000 },
+    { name: "Scallop putih", price: 2000 },
+    { name: "Tempura", price: 2000 },
+    { name: "Mie Goreng", price: 6000 },
+    { name: "Telur rebus", price: 3000 },
+    { name: "sosis merah", price: 2000 },
+    { name: "All Sachet Dingin", price: 7000 },
+    { name: "Teh TARIK PANAS", price: 6000 },
+    { name: "Sate Telor Puyuh", price: 3000 },
+    { name: "Kopi Hitam", price: 5000 },
+    { name: "Kepala / ndas", price: 3000 },
+    { name: "All Sachet Panas", price: 6000 },
+    { name: "Krupuk", price: 2000 },
+    { name: "es teh", price: 5000 },
+    { name: "Milo Panas", price: 6000 },
+    { name: "Nasi Kucing / Sego", price: 3000 },
+    { name: "Rempelo ati", price: 3000 },
+    { name: "Kopi Susu Racik", price: 7000 },
+    { name: "Es Teh Tarik", price: 8000 },
+    { name: "Sate Jamur", price: 3000 },
+    { name: "Wedang Jahe", price: 6000 },
+    { name: "Wedang Uwuh", price: 6000 },
+    { name: "Sate Pentol", price: 3000 },
+    { name: "Susu Jahe", price: 10000 },
+    { name: "jamur crispy", price: 3000 },
+    { name: "Chocolatos Panas", price: 6000 },
+    { name: "wedang jahe kecil", price: 4000 },
+    { name: "krupuk rambak panjang", price: 30000 },
+    { name: "Aren kopi Panas", price: 3000 },
+    { name: "jeruk panas", price: 3000 },
+    { name: "Ceker", price: 2000 },
+    { name: "Chocolatos Es", price: 7000 },
+    { name: "Milo Es", price: 7000 },
+    { name: "Susu Anget", price: 3000 },
+    { name: "Tempe Bacem", price: 3000 },
+    { name: "Tahu Bacem", price: 3000 },
+    { name: "sachet panas gede", price: 3000 },
+    { name: "Mie Bangladesh", price: 8000 },
+    { name: "es kopi susu", price: 6000 },
+    { name: "Scallop merah", price: 2000 },
+    { name: "Peyek", price: 1500 },
+    { name: "Teh Susu", price: 3000 },
+    { name: "wedang watuk pilek", price: 6000 },
+    { name: "es jahe", price: 3000 },
+    { name: "Sosis jumbo", price: 10000 },
+    { name: "Mie Spontan", price: 8000 },
+    { name: "Es Susu", price: 3000 }
+  ];
+
+  const newProducts = [];
+  for (const item of legacyProducts) {
+    if (!existingNames.has(item.name.toLowerCase())) {
+      newProducts.push({
+        name: item.name,
+        price: item.price,
+        stock: 100,
+        lacakStok: false,
+        resep: [],
+        status_sync: 0,
+        userId
+      });
+    }
+  }
+
+  if (newProducts.length > 0) {
+    await db.products.bulkAdd(newProducts);
+  }
+}
+
+
 

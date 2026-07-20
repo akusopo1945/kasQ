@@ -6,22 +6,164 @@ import {
   CheckCircle, XCircle, RefreshCw, BarChart2, Calculator,
   Settings, User, Printer, Bluetooth
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import XLSX from 'xlsx-js-style';
-import html2canvas from 'html2canvas';
-
 import HeaderStatus from './components/HeaderStatus';
 import VoiceButton from './components/VoiceButton';
 import HppCalculator from './components/HppCalculator';
-import { db, seedUserProducts, seedTestUser } from './services/db.service';
-import { 
-  syncLocalToCloud, 
-  subscribeToCloudChanges, 
-  unsubscribeFromCloudChanges 
-} from './services/firebase.service';
+import TransactionChart from './components/TransactionChart';
+import { db, seedUserProducts, seedTestUser, seedLegacyProducts } from './services/db.service';
 import { parseCommand } from './services/ai.service';
 import { printerService } from './services/printer.service';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+
+const CartItem = ({ item, onUpdateQty, onRemove }) => {
+  const [startX, setStartX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  const handleTouchStart = (e) => {
+    setStartX(e.touches[0].clientX);
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isSwiping) return;
+    const currentClientX = e.touches[0].clientX;
+    const diffX = currentClientX - startX;
+    
+    if (diffX < 0) {
+      const offset = diffX < -120 ? -120 + (diffX + 120) * 0.2 : diffX;
+      setSwipeOffset(offset);
+    } else if (isRevealed && diffX > 0) {
+      const offset = -75 + diffX > 0 ? 0 : -75 + diffX;
+      setSwipeOffset(offset);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsSwiping(false);
+    if (swipeOffset < -130) {
+      onRemove();
+    } else if (swipeOffset < -50) {
+      setSwipeOffset(-75);
+      setIsRevealed(true);
+    } else {
+      setSwipeOffset(0);
+      setIsRevealed(false);
+    }
+  };
+
+  const handleMouseDown = (e) => {
+    setStartX(e.clientX);
+    setIsSwiping(true);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isSwiping) return;
+    const diffX = e.clientX - startX;
+    if (diffX < 0) {
+      const offset = diffX < -120 ? -120 + (diffX + 120) * 0.2 : diffX;
+      setSwipeOffset(offset);
+    } else if (isRevealed && diffX > 0) {
+      const offset = -75 + diffX > 0 ? 0 : -75 + diffX;
+      setSwipeOffset(offset);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsSwiping(false);
+    if (swipeOffset < -130) {
+      onRemove();
+    } else if (swipeOffset < -50) {
+      setSwipeOffset(-75);
+      setIsRevealed(true);
+    } else {
+      setSwipeOffset(0);
+      setIsRevealed(false);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-xl bg-neutral-950 border border-neutral-850">
+      <div 
+        onClick={onRemove}
+        className="absolute inset-0 bg-red-650/90 hover:bg-red-650 flex items-center justify-end pr-5.5 text-white font-bold text-xs rounded-xl cursor-pointer"
+      >
+        <div className="flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-sm">🗑️</span>
+          <span className="text-[9px] mt-0.5">Hapus</span>
+        </div>
+      </div>
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.2s ease-out'
+        }}
+        className="bg-neutral-950 p-3 flex items-center justify-between gap-3 select-none relative z-10"
+      >
+        <div className="min-w-0 pointer-events-none">
+          <h4 className="text-xs font-bold text-neutral-200 truncate">{item.name}</h4>
+          <span className="text-[10px] text-neutral-400">Rp {item.price.toLocaleString('id-ID')}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            type="button"
+            onClick={() => onUpdateQty(item.id, -1)}
+            className="w-5.5 h-5.5 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded flex items-center justify-center transition cursor-pointer"
+          >
+            -
+          </button>
+          <span className="text-xs font-bold text-white min-w-4 text-center">{item.qty}</span>
+          <button 
+            type="button"
+            onClick={() => onUpdateQty(item.id, 1)}
+            className="w-5.5 h-5.5 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded flex items-center justify-center transition cursor-pointer"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Helper function to precisely categorize success messages for modals
+const getSuccessPopupInfo = (msg) => {
+  if (!msg) return { title: '', type: 'default' };
+  const m = msg.toLowerCase();
+  
+  if (m.includes('sync') || m.includes('sinkronisasi')) {
+    return {
+      title: 'Sinkronisasi Sukses',
+      type: 'sync'
+    };
+  }
+  
+  const isVoiceCommand = 
+    m.includes('ke keranjang!') ||
+    (m.startsWith('pengeluaran rp') && m.endsWith('dicatat!')) ||
+    (m.startsWith('kasbon') && m.endsWith('dicatat!')) ||
+    (m.startsWith('bahan baku') && m.includes('ditambah') && !m.includes('ditambahkan'));
+    
+  if (isVoiceCommand || m.includes('suara') || m.includes('analisis')) {
+    return {
+      title: 'Perintah Suara AI',
+      type: 'voice'
+    };
+  }
+  
+  return {
+    title: 'Transaksi Berhasil',
+    type: 'default'
+  };
+};
 
 export default function App() {
   // Authentication & Session
@@ -44,7 +186,7 @@ export default function App() {
 
 
   // Active Tab / Page Navigation
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | catalog | materials | debts | reports
+  const [activeTab, setActiveTab] = useState('catalog'); // catalog | history | settings
   const [showSyncGuide, setShowSyncGuide] = useState(false);
 
   // PWA Install Prompt State
@@ -81,11 +223,11 @@ export default function App() {
   // Diagnostics State
   const [diagStatus, setDiagStatus] = useState(null); // null | 'running' | 'done'
   const [diagResults, setDiagResults] = useState({
-    network: { status: 'idle', details: '' },
-    firebase: { status: 'idle', details: '' },
-    gemini: { status: 'idle', details: '' },
-    googleSheets: { status: 'idle', details: '' },
-    microphone: { status: 'idle', details: '' }
+    network: { status: 'idle', details: 'Belum diuji' },
+    firebase: { status: 'idle', details: 'Belum diuji' },
+    gemini: { status: 'idle', details: 'Belum diuji' },
+    googleSheets: { status: 'idle', details: 'Belum diuji' },
+    microphone: { status: 'idle', details: 'Belum diuji' }
   });
 
   // Common UI / Operation States
@@ -113,6 +255,14 @@ export default function App() {
   const [pendingBills, setPendingBills] = useState([]);
   const [showPendingBillsModal, setShowPendingBillsModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [showSplash, setShowSplash] = useState(() => {
+    const hasSession = localStorage.getItem('kasq_session') || sessionStorage.getItem('kasq_session');
+    return !!hasSession;
+  });
+  const [splashText, setSplashText] = useState('Menghubungkan ke ruang kerja...');
+  const [showPassword, setShowPassword] = useState(false);
+  const [shakeError, setShakeError] = useState(false);
   const [showFullscreenQris, setShowFullscreenQris] = useState(false);
   const [profileName, setProfileName] = useState(currentUser ? currentUser.name : '');
   const [profileBusiness, setProfileBusiness] = useState(currentUser ? currentUser.business : '');
@@ -129,6 +279,8 @@ export default function App() {
   const catalogFileInputRef = React.useRef(null);
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncStatusText, setSyncStatusText] = useState('');
 
   // Printer States
   const [printerSettings, setPrinterSettings] = useState(() => printerService.getSettings());
@@ -153,6 +305,7 @@ export default function App() {
   // Cart for POS Sales
   const [cart, setCart] = useState([]);
   const backupFileInputRef = React.useRef(null);
+  const csvFileInputRef = React.useRef(null);
 
   // Modal / Form States
   const [showProductForm, setShowProductForm] = useState(false);
@@ -182,6 +335,8 @@ export default function App() {
     setAuthError('');
     if (!authPhone || !authPassword) {
       setAuthError('No. HP & Password wajib diisi');
+      setShakeError(true);
+      setTimeout(() => setShakeError(false), 500);
       return;
     }
 
@@ -189,11 +344,29 @@ export default function App() {
       if (authMode === 'register') {
         if (!authName || !authBusiness) {
           setAuthError('Nama & Nama Usaha wajib diisi');
+          setShakeError(true);
+          setTimeout(() => setShakeError(false), 500);
           return;
         }
-        const existing = await db.users.where('phone').equals(authPhone).first();
+
+        let existing = await db.users.where('phone').equals(authPhone).first();
+        if (navigator.onLine) {
+          try {
+            const { getDocs, query, where, collection } = await import('firebase/firestore');
+            const q = query(collection(firestore, 'users'), where('phone', '==', authPhone));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              existing = querySnapshot.docs[0].data();
+            }
+          } catch (e) {
+            console.error("Firestore register check failed:", e);
+          }
+        }
+
         if (existing) {
           setAuthError('Nomor HP sudah terdaftar');
+          setShakeError(true);
+          setTimeout(() => setShakeError(false), 500);
           return;
         }
 
@@ -201,7 +374,8 @@ export default function App() {
           phone: authPhone,
           password: authPassword,
           name: authName,
-          business: authBusiness
+          business: authBusiness,
+          updatedAt: new Date().toISOString()
         };
         const userId = await db.users.add(newUser);
         const userWithId = { id: userId, ...newUser };
@@ -218,12 +392,51 @@ export default function App() {
           localStorage.removeItem('kasq_remembered_phone');
         }
 
-        setCurrentUser(userWithId);
-        setSuccessMsg('Pendaftaran berhasil!');
+        setSplashText('Menyiapkan ruang kerja & katalog Anda...');
+        setShowSplash(true);
+
+        if (navigator.onLine) {
+          try {
+            const { syncLocalToCloud } = await import('./services/firebase.service');
+            await syncLocalToCloud(userId);
+          } catch (e) {
+            console.error("Gagal sinkronisasi data awal pendaftaran:", e);
+          }
+        }
+
+        setTimeout(() => {
+          setCurrentUser(userWithId);
+          setSuccessMsg('Pendaftaran berhasil!');
+        }, 1800);
       } else {
-        const user = await db.users.where('phone').equals(authPhone).first();
+        // LOGIN
+        let user = await db.users.where('phone').equals(authPhone).first();
+
+        // Check cloud if online (to support logging in from new/other devices)
+        if (navigator.onLine) {
+          try {
+            const { getDocs, query, where, collection } = await import('firebase/firestore');
+            const q = query(collection(firestore, 'users'), where('phone', '==', authPhone));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+              const docSnap = querySnapshot.docs[0];
+              const cloudUser = { id: Number(docSnap.id), ...docSnap.data() };
+
+              if (cloudUser.password === authPassword) {
+                await db.users.put(cloudUser);
+                user = cloudUser;
+              }
+            }
+          } catch (e) {
+            console.error("Gagal verifikasi login ke server, fallback ke database lokal:", e);
+          }
+        }
+
         if (!user || user.password !== authPassword) {
           setAuthError('Nomor HP atau password salah');
+          setShakeError(true);
+          setTimeout(() => setShakeError(false), 500);
           return;
         }
 
@@ -237,15 +450,89 @@ export default function App() {
           localStorage.removeItem('kasq_remembered_phone');
         }
 
-        setCurrentUser(user);
-        setSuccessMsg('Login berhasil!');
+        setSplashText('Menghubungkan ke ruang kerja KasQ...');
+        setShowSplash(true);
+
+        // If online, perform initial sync / download existing cloud data to local DB
+        if (navigator.onLine) {
+          try {
+            const uId = user.id;
+            const { getDocs, collection } = await import('firebase/firestore');
+            const collectionsToDownload = ['products', 'transactions', 'debts', 'materials'];
+            let step = 0;
+
+            isSyncingFromCloud.value = true;
+            try {
+              for (const colName of collectionsToDownload) {
+                step++;
+                const colLabel = colName === 'products' ? 'produk' : colName === 'transactions' ? 'transaksi' : colName === 'debts' ? 'kasbon' : 'bahan baku';
+                setSplashText(`Mengunduh ${colLabel} dari cloud... (${Math.round((step / 4) * 100)}%)`);
+
+                const colRef = collection(firestore, `users/${uId}/${colName}`);
+                const snap = await getDocs(colRef);
+
+                await db.transaction('rw', db[colName], async () => {
+                  for (const docD of snap.docs) {
+                    const itemData = { 
+                      ...docD.data(), 
+                      id: Number(docD.id),
+                      status_sync: 1
+                    };
+                    await db[colName].put(itemData);
+                  }
+                });
+              }
+            } finally {
+              isSyncingFromCloud.value = false;
+            }
+
+            // Sync settings from cloud profile to local storage if present
+            if (user.printerSettings) {
+              localStorage.setItem('kasq_printer_settings', JSON.stringify(user.printerSettings));
+            }
+            if (user.geminiApiKey) {
+              localStorage.setItem('kasq_gemini_api_key', user.geminiApiKey);
+            }
+          } catch (e) {
+            console.error("Gagal mengunduh data cloud saat login:", e);
+          }
+        }
+
+        // Prevent startup auto-import of legacy CSV for already existing users
+        localStorage.setItem(`kasq_legacy_imported_${user.id}`, 'true');
+
+        setTimeout(() => {
+          // Read updated settings from local storage if synced
+          setPrinterSettings(printerService.getSettings());
+          setApiKey(localStorage.getItem('kasq_gemini_api_key') || '');
+          setCurrentUser(user);
+          setSuccessMsg('Login berhasil!');
+        }, 1200);
       }
     } catch (err) {
       setAuthError('Terjadi kesalahan autentikasi');
+      setShakeError(true);
+      setTimeout(() => setShakeError(false), 500);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear local cache tables to prevent data leaks between accounts/sessions
+    isSyncingFromCloud.value = true;
+    try {
+      await Promise.all([
+        db.products.clear(),
+        db.transactions.clear(),
+        db.debts.clear(),
+        db.materials.clear(),
+        db.tombstones.clear()
+      ]);
+    } catch (err) {
+      console.error("Gagal membersihkan database lokal saat logout:", err);
+    } finally {
+      isSyncingFromCloud.value = false;
+    }
+
     localStorage.removeItem('kasq_session');
     sessionStorage.removeItem('kasq_session');
     setCurrentUser(null);
@@ -254,7 +541,7 @@ export default function App() {
     setTransactions([]);
     setDebts([]);
     setMaterials([]);
-    setActiveTab('dashboard');
+    setActiveTab('catalog');
   };
 
   // --- DATA LOADING & SYNC ---
@@ -302,22 +589,68 @@ export default function App() {
     }
   };
 
+  // Helper to trigger cloud sync when online and automatically update data
+  const syncIfOnline = async () => {
+    if (navigator.onLine && currentUser) {
+      setIsSyncing(true);
+      setSyncProgress(0);
+      setSyncStatusText('Sinkronisasi otomatis...');
+      try {
+        const { syncLocalToCloud } = await import('./services/firebase.service');
+        await syncLocalToCloud(currentUser.id, (progress, statusText) => {
+          setSyncProgress(progress);
+          setSyncStatusText(statusText);
+        });
+        await refreshData();
+      } catch (err) {
+        console.error("Gagal melakukan otomatisasi sinkronisasi:", err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+  };
+
   useEffect(() => {
+    let active = true;
     if (currentUser) {
       setProfileName(currentUser.name);
       setProfileBusiness(currentUser.business);
       setProfilePhone(currentUser.phone);
       
       // Subscribe to real-time Firestore sync
-      subscribeToCloudChanges(currentUser.id, refreshData);
+      import('./services/firebase.service').then(({ subscribeToCloudChanges }) => {
+        if (active) subscribeToCloudChanges(currentUser.id, refreshData);
+      });
       
-      // Auto push any unsynced offline data
-      syncLocalToCloud(currentUser.id).then(() => refreshData());
+      // Seed legacy products and then sync/refresh
+      seedLegacyProducts(currentUser.id).then(async () => {
+        const importKey = `kasq_legacy_imported_${currentUser.id}`;
+        if (!localStorage.getItem(importKey)) {
+          try {
+            const response = await fetch('/Laporan_Bersua_Sejenak.csv');
+            if (response.ok) {
+              const csvText = await response.text();
+              await processCSVImport(csvText, currentUser.id);
+              localStorage.setItem(importKey, 'true');
+            }
+          } catch (err) {
+            console.error('Auto import of legacy transactions failed:', err);
+          }
+        }
+        import('./services/firebase.service').then(({ syncLocalToCloud }) => {
+          if (active) syncLocalToCloud(currentUser.id).then(() => refreshData());
+        });
+      });
     } else {
-      unsubscribeFromCloudChanges();
+      import('./services/firebase.service').then(({ unsubscribeFromCloudChanges }) => {
+        unsubscribeFromCloudChanges();
+      });
     }
     return () => {
-      unsubscribeFromCloudChanges();
+      active = false;
+      import('./services/firebase.service').then(({ unsubscribeFromCloudChanges }) => {
+        unsubscribeFromCloudChanges();
+      });
     };
   }, [currentUser?.id]);
 
@@ -335,7 +668,9 @@ export default function App() {
   useEffect(() => {
     const handleOnline = () => {
       if (currentUser) {
-        syncLocalToCloud(currentUser.id).then(() => refreshData());
+        import('./services/firebase.service').then(({ syncLocalToCloud }) => {
+          syncLocalToCloud(currentUser.id).then(() => refreshData());
+        });
       }
     };
     window.addEventListener('online', handleOnline);
@@ -391,11 +726,54 @@ export default function App() {
     initApp();
   }, [currentUser]);
 
+  useEffect(() => {
+    if (showSplash) {
+      const t = setTimeout(() => {
+        setShowSplash(false);
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
-  // Save API Key to localStorage
-  const handleApiKeyChange = (key) => {
+  // Listen to remote changes in settings/API keys synced from another device
+  useEffect(() => {
+    const handlePrinterSettingsUpdate = (e) => {
+      setPrinterSettings(e.detail);
+    };
+    const handleApiKeyUpdate = (e) => {
+      setApiKey(e.detail);
+    };
+
+    window.addEventListener('printer-settings-updated', handlePrinterSettingsUpdate);
+    window.addEventListener('api-key-updated', handleApiKeyUpdate);
+
+    return () => {
+      window.removeEventListener('printer-settings-updated', handlePrinterSettingsUpdate);
+      window.removeEventListener('api-key-updated', handleApiKeyUpdate);
+    };
+  }, []);
+
+
+  // Save API Key to localStorage & IndexedDB for syncing
+  const handleApiKeyChange = async (key) => {
     setApiKey(key);
     localStorage.setItem('kasq_gemini_api_key', key);
+    if (currentUser) {
+      try {
+        const uId = currentUser.id;
+        const localUser = await db.users.get(uId);
+        if (localUser) {
+          await db.users.put({
+            ...localUser,
+            geminiApiKey: key,
+            updatedAt: new Date().toISOString()
+          });
+          syncIfOnline();
+        }
+      } catch (e) {
+        console.error("Gagal menyimpan API key ke DB lokal:", e);
+      }
+    }
   };
 
 
@@ -577,6 +955,17 @@ export default function App() {
 
   // --- CART OPERATIONS ---
   const addToCart = (product) => {
+    if (product.lacakStok && product.stock <= 0) {
+      setErrorMsg(`Produk "${product.name}" habis!`);
+      return;
+    }
+
+    const existing = cart.find(item => item.id === product.id);
+    if (product.lacakStok && existing && existing.qty >= product.stock) {
+      setErrorMsg(`Stok tidak mencukupi untuk "${product.name}". Maksimal: ${product.stock}`);
+      return;
+    }
+
     setAnimatingItems((prev) => ({ ...prev, [product.id]: true }));
     setTimeout(() => {
       setAnimatingItems((prev) => ({ ...prev, [product.id]: false }));
@@ -588,8 +977,8 @@ export default function App() {
     }, 300);
 
     setCart((prev) => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
+      const existingItem = prev.find(item => item.id === product.id);
+      if (existingItem) {
         return prev.map(item =>
           item.id === product.id ? { ...item, qty: item.qty + 1 } : item
         );
@@ -601,7 +990,17 @@ export default function App() {
   const updateCartQty = (id, change) => {
     setCart((prev) => {
       return prev
-        .map(item => (item.id === id ? { ...item, qty: Math.max(0, item.qty + change) } : item))
+        .map(item => {
+          if (item.id === id) {
+            const nextQty = item.qty + change;
+            if (item.lacakStok && change > 0 && nextQty > item.stock) {
+              setErrorMsg(`Stok tidak mencukupi untuk "${item.name}". Maksimal: ${item.stock}`);
+              return item;
+            }
+            return { ...item, qty: Math.max(0, nextQty) };
+          }
+          return item;
+        })
         .filter(item => item.qty > 0);
     });
   };
@@ -676,6 +1075,24 @@ export default function App() {
     }
   };
 
+  const handleDeleteTransaction = async (id) => {
+    const ok = window.confirm(
+      'Hapus transaksi ini?\n\nPERINGATAN: Transaksi ini akan dihapus permanen dari database lokal dan disinkronisasikan ke cloud. Jika ada produk yang menggunakan pelacakan stok, stok tidak akan dikembalikan otomatis.'
+    );
+    if (!ok) return;
+
+    try {
+      await db.transactions.delete(id);
+      setSuccessMsg('Transaksi berhasil dihapus.');
+      setErrorMsg('');
+      await refreshData();
+      syncIfOnline();
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+      setErrorMsg('Gagal menghapus transaksi');
+    }
+  };
+
   const handleCompleteCheckout = async (printReceipt = false) => {
     if (cart.length === 0 || !currentUser) return;
     setIsProcessing(true);
@@ -731,6 +1148,7 @@ export default function App() {
       setSuccessMsg(`Penjualan sukses! Total: Rp ${total.toLocaleString('id-ID')}`);
       setErrorMsg('');
       await refreshData();
+      syncIfOnline();
     } catch (err) {
       console.error(err);
       setErrorMsg('Gagal memproses checkout');
@@ -762,6 +1180,7 @@ export default function App() {
         sessionStorage.setItem('kasq_session', JSON.stringify(updatedUser));
       }
       setSuccessMsg('Profil berhasil diperbarui!');
+      syncIfOnline();
     } catch (err) {
       console.error(err);
       setErrorMsg('Gagal memperbarui profil. No. HP mungkin sudah terdaftar.');
@@ -799,10 +1218,26 @@ export default function App() {
     }
   };
 
-  const handleUpdatePrinterSetting = (key, value) => {
+  const handleUpdatePrinterSetting = async (key, value) => {
     const updated = { ...printerSettings, [key]: value };
     setPrinterSettings(updated);
     printerService.saveSettings(updated);
+    if (currentUser) {
+      try {
+        const uId = currentUser.id;
+        const localUser = await db.users.get(uId);
+        if (localUser) {
+          await db.users.put({
+            ...localUser,
+            printerSettings: updated,
+            updatedAt: new Date().toISOString()
+          });
+          syncIfOnline();
+        }
+      } catch (e) {
+        console.error("Gagal menyimpan pengaturan ke DB lokal:", e);
+      }
+    }
   };
 
   const handleTestPrint = async () => {
@@ -821,131 +1256,182 @@ export default function App() {
     }
   };
 
-  const runDiagnostics = async () => {
-    setDiagStatus('running');
-    const results = {
-      network: { status: 'running', details: 'Memeriksa internet...' },
-      firebase: { status: 'running', details: 'Menghubungkan ke Firestore...' },
-      gemini: { status: 'running', details: 'Memvalidasi API Key & model...' },
-      googleSheets: { status: 'running', details: 'Menguji Google Sheets Web App...' },
-      microphone: { status: 'running', details: 'Memeriksa izin rekaman...' }
-    };
-    setDiagResults({ ...results });
+  const runSingleDiagnostic = async (testKey) => {
+    setDiagResults(prev => ({
+      ...prev,
+      [testKey]: { status: 'running', details: 'Menguji...' }
+    }));
 
-    // 1. Network check
     const isOnline = navigator.onLine;
-    results.network = {
-      status: isOnline ? 'success' : 'error',
-      details: isOnline ? 'Tersambung ke Internet' : 'Tidak ada koneksi internet (Offline-First Aktif)'
-    };
-    setDiagResults({ ...results });
 
-    // 2. Microphone check
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        const status = await navigator.permissions.query({ name: 'microphone' });
-        results.microphone = {
-          status: status.state === 'granted' ? 'success' : status.state === 'prompt' ? 'warning' : 'error',
-          details: status.state === 'granted' 
-            ? 'Izin Mikrofon: Diizinkan (Granted)' 
-            : status.state === 'prompt' 
-              ? 'Izin Mikrofon: Siap Ditanyakan (Prompt)' 
-              : 'Izin Mikrofon: Diblokir (Denied). Harap izinkan melalui ikon gembok di URL browser!'
-        };
-      } else {
-        results.microphone = { status: 'warning', details: 'Browser tidak mendukung Permissions API. Ketuk tombol mic untuk menguji langsung.' };
-      }
-    } catch (e) {
-      results.microphone = { status: 'warning', details: 'Gagal mengecek izin: ' + e.message };
-    }
-    setDiagResults({ ...results });
-
-    // 3. Firebase check
-    if (isOnline) {
+    if (testKey === 'network') {
+      const online = navigator.onLine;
+      setDiagResults(prev => ({
+        ...prev,
+        network: {
+          status: online ? 'success' : 'error',
+          details: online ? 'Tersambung ke Internet' : 'Tidak ada koneksi internet (Offline-First Aktif)'
+        }
+      }));
+    } else if (testKey === 'microphone') {
       try {
-        const { firestore } = await import('./services/firebase.service');
-        const { doc, getDoc, setDoc } = await import('firebase/firestore');
-        if (currentUser) {
-          const testRef = doc(firestore, `users/${currentUser.id}/test_connection/ping`);
-          await setDoc(testRef, { timestamp: new Date().toISOString(), test: true }, { merge: true });
-          const snap = await getDoc(testRef);
-          if (snap.exists() && snap.data().test) {
-            results.firebase = { status: 'success', details: 'Koneksi Firestore Berhasil (Dapat Tulis/Baca)' };
-          } else {
-            results.firebase = { status: 'error', details: 'Gagal memverifikasi penulisan data ke Firestore.' };
-          }
+        if (navigator.permissions && navigator.permissions.query) {
+          const status = await navigator.permissions.query({ name: 'microphone' });
+          setDiagResults(prev => ({
+            ...prev,
+            microphone: {
+              status: status.state === 'granted' ? 'success' : status.state === 'prompt' ? 'warning' : 'error',
+              details: status.state === 'granted' 
+                ? 'Izin Mikrofon: Diizinkan (Granted)' 
+                : status.state === 'prompt' 
+                  ? 'Izin Mikrofon: Siap Ditanyakan (Prompt)' 
+                  : 'Izin Mikrofon: Diblokir (Denied). Harap izinkan melalui ikon gembok di URL browser!'
+            }
+          }));
         } else {
-          results.firebase = { status: 'warning', details: 'Silakan masuk akun terlebih dahulu untuk menguji Firebase.' };
+          setDiagResults(prev => ({
+            ...prev,
+            microphone: { status: 'warning', details: 'Browser tidak mendukung Permissions API. Ketuk tombol mic untuk menguji langsung.' }
+          }));
         }
       } catch (e) {
-        console.error('Firebase Diagnostic Error:', e);
-        let msg = e.message || 'Koneksi ditolak';
-        if (msg.includes('permission-denied')) {
-          msg = 'Ditolak: Aturan Keamanan (Security Rules) Firestore memblokir penulisan, atau database belum dibuat di Firebase Console!';
-        } else if (msg.includes('not-found') || msg.includes('Database')) {
-          msg = 'Database Tidak Ditemukan: Buat database Cloud Firestore terlebih dahulu di Firebase Console!';
-        }
-        results.firebase = { status: 'error', details: `Firestore Gagal: ${msg}` };
+        setDiagResults(prev => ({
+          ...prev,
+          microphone: { status: 'warning', details: 'Gagal mengecek izin: ' + e.message }
+        }));
       }
-    } else {
-      results.firebase = { status: 'warning', details: 'Dilewati: Koneksi offline (Firebase ditangguhkan)' };
-    }
-    setDiagResults({ ...results });
-
-    // 4. Google Sheets check
-    if (isOnline) {
-      const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL || '';
-      if (!scriptUrl) {
-        results.googleSheets = { status: 'warning', details: 'Belum dikonfigurasi (VITE_GOOGLE_SCRIPT_URL kosong)' };
-      } else {
+    } else if (testKey === 'firebase') {
+      if (isOnline) {
         try {
-          const controller = new AbortController();
-          const id = setTimeout(() => controller.abort(), 6000);
-          await fetch(scriptUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ items: [] }),
-            signal: controller.signal
-          });
-          clearTimeout(id);
-          results.googleSheets = { status: 'success', details: 'Koneksi ke Google Script / Sheets Web App Aktif' };
-        } catch (e) {
-          results.googleSheets = { status: 'error', details: 'Gagal menghubungi Google Script: ' + (e.name === 'AbortError' ? 'Koneksi timeout' : e.message) };
-        }
-      }
-    } else {
-      results.googleSheets = { status: 'warning', details: 'Dilewati: Koneksi offline' };
-    }
-    setDiagResults({ ...results });
-
-    // 5. Gemini AI check
-    if (isOnline) {
-      if (!apiKey) {
-        results.gemini = { status: 'warning', details: 'API Key kosong. Silakan masukkan Gemini API Key Anda!' };
-      } else {
-        try {
-          const { GoogleGenAI } = await import('@google/genai');
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: 'say "ping"',
-            config: { maxOutputTokens: 5 }
-          });
-          if (response.text) {
-            results.gemini = { status: 'success', details: 'API Key Valid! Gemini AI merespons: "' + response.text.trim() + '"' };
+          const { firestore } = await import('./services/firebase.service');
+          const { doc, getDoc, setDoc } = await import('firebase/firestore');
+          if (currentUser) {
+            const testRef = doc(firestore, `users/${currentUser.id}/test_connection/ping`);
+            await setDoc(testRef, { timestamp: new Date().toISOString(), test: true }, { merge: true });
+            const snap = await getDoc(testRef);
+            if (snap.exists() && snap.data().test) {
+              setDiagResults(prev => ({
+                ...prev,
+                firebase: { status: 'success', details: 'Koneksi Firestore Berhasil (Dapat Tulis/Baca)' }
+              }));
+            } else {
+              setDiagResults(prev => ({
+                ...prev,
+                firebase: { status: 'error', details: 'Gagal memverifikasi penulisan data ke Firestore.' }
+              }));
+            }
           } else {
-            results.gemini = { status: 'error', details: 'Gemini merespons kosong.' };
+            setDiagResults(prev => ({
+              ...prev,
+              firebase: { status: 'warning', details: 'Silakan masuk akun terlebih dahulu untuk menguji Firebase.' }
+            }));
           }
         } catch (e) {
-          results.gemini = { status: 'error', details: 'Gemini Gagal: ' + (e.message || 'API Key salah atau kuota habis.') };
+          console.error('Firebase Diagnostic Error:', e);
+          let msg = e.message || 'Koneksi ditolak';
+          if (msg.includes('permission-denied')) {
+            msg = 'Ditolak: Aturan Keamanan (Security Rules) Firestore memblokir penulisan, atau database belum dibuat di Firebase Console!';
+          } else if (msg.includes('not-found') || msg.includes('Database')) {
+            msg = 'Database Tidak Ditemukan: Buat database Cloud Firestore terlebih dahulu di Firebase Console!';
+          }
+          setDiagResults(prev => ({
+            ...prev,
+            firebase: { status: 'error', details: `Firestore Gagal: ${msg}` }
+          }));
         }
+      } else {
+        setDiagResults(prev => ({
+          ...prev,
+          firebase: { status: 'warning', details: 'Dilewati: Koneksi offline (Firebase ditangguhkan)' }
+        }));
       }
-    } else {
-      results.gemini = { status: 'warning', details: 'Dilewati: Koneksi offline (Menggunakan local NLP parser)' };
+    } else if (testKey === 'googleSheets') {
+      if (isOnline) {
+        const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL || '';
+        if (!scriptUrl) {
+          setDiagResults(prev => ({
+            ...prev,
+            googleSheets: { status: 'warning', details: 'Belum dikonfigurasi (VITE_GOOGLE_SCRIPT_URL kosong)' }
+          }));
+        } else {
+          try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 6000);
+            await fetch(scriptUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ items: [] }),
+              signal: controller.signal
+            });
+            clearTimeout(id);
+            setDiagResults(prev => ({
+              ...prev,
+              googleSheets: { status: 'success', details: 'Koneksi ke Google Script / Sheets Web App Aktif' }
+            }));
+          } catch (e) {
+            setDiagResults(prev => ({
+              ...prev,
+              googleSheets: { status: 'error', details: 'Gagal menghubungi Google Script: ' + (e.name === 'AbortError' ? 'Koneksi timeout' : e.message) }
+            }));
+          }
+        }
+      } else {
+        setDiagResults(prev => ({
+          ...prev,
+          googleSheets: { status: 'warning', details: 'Dilewati: Koneksi offline' }
+        }));
+      }
+    } else if (testKey === 'gemini') {
+      if (isOnline) {
+        if (!apiKey) {
+          setDiagResults(prev => ({
+            ...prev,
+            gemini: { status: 'warning', details: 'API Key kosong. Silakan masukkan Gemini API Key Anda!' }
+          }));
+        } else {
+          try {
+            const { GoogleGenAI } = await import('@google/genai');
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+              model: 'gemini-3.5-flash',
+              contents: 'say "ping"',
+              config: { maxOutputTokens: 5 }
+            });
+            if (response.text) {
+              setDiagResults(prev => ({
+                ...prev,
+                gemini: { status: 'success', details: 'API Key Valid! Gemini AI merespons: "' + response.text.trim() + '"' }
+              }));
+            } else {
+              setDiagResults(prev => ({
+                ...prev,
+                gemini: { status: 'error', details: 'Gemini merespons kosong.' }
+              }));
+            }
+          } catch (e) {
+            setDiagResults(prev => ({
+              ...prev,
+              gemini: { status: 'error', details: 'Gemini Gagal: ' + (e.message || 'API Key salah atau kuota habis.') }
+            }));
+          }
+        }
+      } else {
+        setDiagResults(prev => ({
+          ...prev,
+          gemini: { status: 'warning', details: 'Dilewati: Koneksi offline (Menggunakan local NLP parser)' }
+        }));
+      }
     }
+  };
 
-    setDiagResults({ ...results });
+  const runDiagnostics = async () => {
+    setDiagStatus('running');
+    await runSingleDiagnostic('network');
+    await runSingleDiagnostic('microphone');
+    await runSingleDiagnostic('firebase');
+    await runSingleDiagnostic('googleSheets');
+    await runSingleDiagnostic('gemini');
     setDiagStatus('done');
   };
 
@@ -1004,6 +1490,7 @@ export default function App() {
         const element = document.getElementById('receipt-capture');
         if (element) {
           try {
+            const { default: html2canvas } = await import('html2canvas');
             const canvas = await html2canvas(element, {
               scale: 2, // High resolution
               useCORS: true,
@@ -1147,11 +1634,23 @@ export default function App() {
 
   const handlePushSyncData = async () => {
     if (!navigator.onLine || !currentUser) return;
+    
+    if (unsyncedCount === 0) {
+      setSuccessMsg('Seluruh data Anda sudah terupdate dan tersimpan aman di Cloud.');
+      return;
+    }
+
     setIsSyncing(true);
+    setSyncProgress(0);
+    setSyncStatusText('Memulai sinkronisasi...');
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await syncLocalToCloud(currentUser.id);
+      const { syncLocalToCloud } = await import('./services/firebase.service');
+      await syncLocalToCloud(currentUser.id, (progress, statusText) => {
+        setSyncProgress(progress);
+        setSyncStatusText(statusText);
+      });
       setSuccessMsg('Sinkronisasi Firestore Cloud berhasil! Seluruh data Anda disimpan aman.');
       await refreshData();
     } catch (err) {
@@ -1165,6 +1664,7 @@ export default function App() {
   const handlePullSyncData = async () => {
     if (!navigator.onLine || !currentUser) return;
     try {
+      const { syncLocalToCloud } = await import('./services/firebase.service');
       await syncLocalToCloud(currentUser.id);
       await refreshData();
     } catch (err) {
@@ -1202,6 +1702,7 @@ export default function App() {
       setProdLacak(true);
       setProdResep([]);
       await refreshData();
+      syncIfOnline();
     } catch (err) {
       setErrorMsg('Gagal menyimpan produk');
     }
@@ -1222,6 +1723,7 @@ export default function App() {
       await db.products.delete(id);
       setSuccessMsg('Produk berhasil dihapus');
       await refreshData();
+      syncIfOnline();
     }
   };
 
@@ -1260,13 +1762,12 @@ export default function App() {
         await db.materials.add(data);
         setSuccessMsg('Bahan baku ditambahkan');
       }
-      setShowMaterialForm(false);
-      setEditingMaterial(null);
       setMatName('');
       setMatStock('');
       setMatStockMin('');
       setMatUnit('pcs');
       await refreshData();
+      syncIfOnline();
     } catch (err) {
       setErrorMsg('Gagal menyimpan bahan baku');
     }
@@ -1286,6 +1787,7 @@ export default function App() {
       await db.materials.delete(id);
       setSuccessMsg('Bahan baku dihapus');
       await refreshData();
+      syncIfOnline();
     }
   };
 
@@ -1310,6 +1812,7 @@ export default function App() {
       setDebtNotes('');
       setSuccessMsg('Kasbon berhasil dicatat');
       await refreshData();
+      syncIfOnline();
     } catch (err) {
       setErrorMsg('Gagal menyimpan kasbon');
     }
@@ -1333,6 +1836,7 @@ export default function App() {
 
         setSuccessMsg(`Kasbon ${debt.customerName} ditandai LUNAS`);
         await refreshData();
+        syncIfOnline();
       }
     } catch (err) {
       setErrorMsg('Gagal melunasi kasbon');
@@ -1344,6 +1848,33 @@ export default function App() {
       await db.debts.delete(id);
       setSuccessMsg('Kasbon berhasil dihapus');
       await refreshData();
+      syncIfOnline();
+    }
+  };
+
+  const saveOrShareFile = async (filename, contentBase64) => {
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      if (Capacitor.isNativePlatform()) {
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+        
+        const writeResult = await Filesystem.writeFile({
+          path: filename,
+          data: contentBase64,
+          directory: Directory.Cache
+        });
+        
+        await Share.share({
+          title: `Ekspor ${filename}`,
+          text: `Bagikan data ekspor: ${filename}`,
+          url: writeResult.uri,
+          dialogTitle: `Bagikan ${filename}`
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save or share file:', err);
+      setErrorMsg(err.message || 'Gagal menyimpan atau membagikan file.');
     }
   };
 
@@ -1384,18 +1915,28 @@ export default function App() {
         hpp
       };
 
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const jsonString = JSON.stringify(payload, null, 2);
       const safeBiz = (currentUser.business || 'usaha').replace(/[^a-zA-Z0-9]/g, '_');
       const dateTag = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `KasQ_Backup_${safeBiz}_${dateTag}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setSuccessMsg('Data cadangan berhasil diunduh!');
+      const filename = `KasQ_Backup_${safeBiz}_${dateTag}.json`;
+
+      const { Capacitor } = await import('@capacitor/core');
+      if (Capacitor.isNativePlatform()) {
+        const base64Data = btoa(unescape(encodeURIComponent(jsonString)));
+        await saveOrShareFile(filename, base64Data);
+        setSuccessMsg('Data cadangan berhasil dibagikan!');
+      } else {
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setSuccessMsg('Data cadangan berhasil diunduh!');
+      }
       setErrorMsg('');
     } catch (err) {
       console.error('Backup failed:', err);
@@ -1520,66 +2061,293 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // --- EXPORT FUNCTIONALITIES ---
-  const exportPDF = () => {
-    if (!currentUser) return;
-    const doc = new jsPDF();
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text(`LAPORAN KEUANGAN - ${currentUser.business.toUpperCase()}`, 14, 20);
-    doc.setFontSize(11);
-    doc.setFont('Helvetica', 'normal');
-    doc.text(`Pemilik: ${currentUser.name} | Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 28);
-    doc.line(14, 32, 196, 32);
-
-    let y = 40;
-    doc.setFont('Helvetica', 'bold');
-    doc.text('RINGKASAN LABA RUGI', 14, y);
-    doc.setFont('Helvetica', 'normal');
-    y += 8;
-    doc.text(`Total Penjualan (Omset): Rp ${totalSales.toLocaleString('id-ID')}`, 14, y);
-    y += 6;
-    doc.text(`Total Pengeluaran: Rp ${totalExpenses.toLocaleString('id-ID')}`, 14, y);
-    y += 6;
-    const netProfit = totalSales - totalExpenses;
-    doc.setFont('Helvetica', 'bold');
-    doc.text(`Laba / Rugi Bersih: Rp ${netProfit.toLocaleString('id-ID')}`, 14, y);
-    doc.setFont('Helvetica', 'normal');
-
-    y += 12;
-    doc.line(14, y, 196, y);
-    y += 8;
-    doc.setFont('Helvetica', 'bold');
-    doc.text('DAFTAR TRANSAKSI TERAKHIR', 14, y);
-    y += 8;
-
-    doc.setFontSize(9);
-    doc.text('Tanggal', 14, y);
-    doc.text('Tipe', 55, y);
-    doc.text('Keterangan', 85, y);
-    doc.text('Total (Rp)', 160, y);
-    y += 4;
-    doc.line(14, y, 196, y);
-    y += 6;
-
-    doc.setFont('Helvetica', 'normal');
-    const logs = transactions.slice(0, 20); // Limit to last 20
-    logs.forEach(t => {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
-      doc.text(new Date(t.date).toLocaleDateString('id-ID'), 14, y);
-      doc.text(t.type, 55, y);
-      doc.text(t.type === 'SALE' ? 'Penjualan' : t.notes || 'Pengeluaran', 85, y);
-      doc.text(t.total.toLocaleString('id-ID'), 160, y);
-      y += 6;
-    });
-
-    doc.save(`Laporan_KasQ_${currentUser.business.replace(/\s+/g, '_')}.pdf`);
+  const triggerImportCSV = () => {
+    if (csvFileInputRef.current) {
+      csvFileInputRef.current.click();
+    }
   };
 
-  const exportHistoryReport = (format = 'pdf') => {
+  const processCSVImport = async (csvText, uId) => {
+    const parseCSV = (text) => {
+      const lines = [];
+      let row = [""];
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const next = text[i+1];
+        if (c === '"') {
+          if (inQuotes && next === '"') {
+            row[row.length - 1] += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (c === ',' && !inQuotes) {
+          row.push("");
+        } else if ((c === '\r' || c === '\n') && !inQuotes) {
+          if (c === '\r' && next === '\n') {
+            i++;
+          }
+          lines.push(row);
+          row = [""];
+        } else {
+          row[row.length - 1] += c;
+        }
+      }
+      if (row.length > 1 || row[0] !== "") {
+        lines.push(row);
+      }
+      return lines;
+    };
+
+    const parsedRows = parseCSV(csvText);
+    if (parsedRows.length < 3) {
+      throw new Error('CSV kosong atau format tidak sesuai');
+    }
+
+    let dataStartIndex = 2;
+    let headerRow = parsedRows[1];
+    if (!headerRow || headerRow[0] !== 'ID' || headerRow[1] !== 'Tanggal') {
+      headerRow = parsedRows[0];
+      dataStartIndex = 1;
+    }
+
+    if (!headerRow || headerRow[0] !== 'ID' || headerRow[1] !== 'Tanggal' || headerRow[3] !== 'Total') {
+      throw new Error('Header CSV tidak valid. Harus: ID, Tanggal, Metode Bayar, Total, Detail Produk');
+    }
+
+    // Inferred and Guess Pricing Logic
+    const inferredPrices = {};
+    const guessPrice = (name) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('sate') || lower.includes('usus') || lower.includes('puyuh') || lower.includes('jamur') || lower.includes('pentol')) return 3000;
+      if (lower.includes('tempura') || lower.includes('scallop') || lower.includes('sosis')) return 2000;
+      if (lower.includes('kopi hitam') || lower.includes('es teh') || lower.includes('teh panas')) return 4000;
+      if (lower.includes('kopi susu') || lower.includes('susu jahe') || lower.includes('milo') || lower.includes('wedang') || lower.includes('tarik')) return 6000;
+      if (lower.includes('nasi') || lower.includes('sego')) return 3000;
+      if (lower.includes('mie')) return 8000;
+      if (lower.includes('krupuk') || lower.includes('kerupuk')) return 2000;
+      return 3000;
+    };
+
+    // Pass 1: infer prices of products sold alone
+    for (let i = dataStartIndex; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      if (!row || row.length < 5 || !row[0]) continue;
+      const rawTotal = parseInt(row[3], 10) || 0;
+      const rawDetail = row[4] || '';
+      const itemParts = rawDetail.split(/,\s*(?![^(]*\))/).map(p => p.trim()).filter(Boolean);
+      if (itemParts.length === 1) {
+        const match = itemParts[0].match(/^(.*?)\s*\((\d+)\)$/);
+        if (match) {
+          const name = match[1].trim();
+          const qty = parseInt(match[2], 10) || 1;
+          if (qty > 0) {
+            inferredPrices[name] = Math.round(rawTotal / qty);
+          }
+        } else {
+          inferredPrices[itemParts[0]] = rawTotal;
+        }
+      }
+    }
+
+    // Collect all unique product names, excluding summary entries like Penjualan H1, H2, etc.
+    const uniqueProductNames = new Set();
+    for (let i = dataStartIndex; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      if (!row || row.length < 5 || !row[0]) continue;
+      const rawDetail = row[4] || '';
+      const itemParts = rawDetail.split(/,\s*(?![^(]*\))/).map(p => p.trim()).filter(Boolean);
+      for (const part of itemParts) {
+        const match = part.match(/^(.*?)\s*\((\d+)\)$/);
+        const name = match ? match[1].trim() : part.trim();
+        if (name && !name.startsWith('Penjualan H')) {
+          uniqueProductNames.add(name);
+        }
+      }
+    }
+
+    // Add missing products to catalog
+    const existingProducts = await db.products.where('userId').equals(uId).toArray();
+    const existingNames = new Set(existingProducts.map(p => p.name.toLowerCase()));
+    const productsToAdd = [];
+    for (const name of uniqueProductNames) {
+      if (!existingNames.has(name.toLowerCase())) {
+        const price = inferredPrices[name] !== undefined ? inferredPrices[name] : guessPrice(name);
+        productsToAdd.push({
+          name,
+          price,
+          stock: 100,
+          lacakStok: false,
+          userId: uId,
+          status_sync: 0
+        });
+        newProductsCount++;
+      }
+    }
+    if (productsToAdd.length > 0) {
+      await db.products.bulkAdd(productsToAdd);
+    }
+
+    // Pass 2: Import transactions
+    let importedCount = 0;
+    const transactionsToAdd = [];
+    for (let i = dataStartIndex; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      if (!row || row.length < 5 || !row[0]) continue;
+
+      const rawDate = row[1];
+      const rawPaymentMethod = row[2] || 'TUNAI';
+      const rawTotal = parseInt(row[3], 10) || 0;
+      const rawDetail = row[4] || '';
+
+      const items = [];
+      const itemParts = rawDetail.split(/,\s*(?![^(]*\))/);
+      for (const part of itemParts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        const match = trimmed.match(/^(.*?)\s*\((\d+)\)$/);
+        if (match) {
+          const name = match[1].trim();
+          const qty = parseInt(match[2], 10) || 1;
+          const price = inferredPrices[name] !== undefined ? inferredPrices[name] : guessPrice(name);
+          items.push({ name, qty, price });
+        } else {
+          const name = trimmed;
+          const price = inferredPrices[name] !== undefined ? inferredPrices[name] : guessPrice(name);
+          items.push({ name, qty: 1, price });
+        }
+      }
+
+      const txnDate = new Date(rawDate);
+      const paymentMethod = rawPaymentMethod.toUpperCase() === 'QRIS' ? 'QRIS' : 'CASH';
+
+      transactionsToAdd.push({
+        type: 'SALE',
+        total: rawTotal,
+        date: isNaN(txnDate.getTime()) ? new Date().toISOString() : txnDate.toISOString(),
+        userId: uId,
+        items,
+        materialsUsed: [],
+        status: 'PAID',
+        paymentMethod,
+        customerName: '',
+        cashReceived: rawTotal,
+        cashChange: 0,
+        status_sync: 0
+      });
+      importedCount++;
+    }
+
+    if (transactionsToAdd.length > 0) {
+      await db.transactions.bulkAdd(transactionsToAdd);
+    }
+
+    return { importedCount, newProductsCount };
+  };
+
+  const handleImportCSV = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !currentUser) return;
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const csvText = ev.target.result;
+      try {
+        const lines = csvText.split('\n');
+        const count = Math.max(0, lines.length - 2);
+
+        const ok = window.confirm(
+          `Impor data penjualan & lengkapi katalog?\n\nDitemukan sekitar ${count} baris transaksi. Sistem juga akan mendeteksi menu produk baru dan menambahkannya ke katalog Anda. Lanjutkan?`
+        );
+        if (!ok) {
+          e.target.value = '';
+          return;
+        }
+
+        const { importedCount, newProductsCount } = await processCSVImport(csvText, currentUser.id);
+
+        setSuccessMsg(`Berhasil mengimpor ${importedCount} transaksi & menambahkan ${newProductsCount} menu baru ke katalog!`);
+        setErrorMsg('');
+        await refreshData();
+      } catch (err) {
+        console.error('Import CSV failed:', err);
+        setErrorMsg(err.message || 'Gagal mengimpor file CSV');
+      }
+      e.target.value = '';
+    };
+    reader.onerror = () => {
+      setErrorMsg('Gagal membaca file CSV');
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  // --- EXPORT FUNCTIONALITIES ---
+  const exportPDF = async () => {
+    if (!currentUser) return;
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF();
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text(`LAPORAN KEUANGAN - ${currentUser.business.toUpperCase()}`, 14, 20);
+      doc.setFontSize(11);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(`Pemilik: ${currentUser.name} | Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 28);
+      doc.line(14, 32, 196, 32);
+
+      let y = 40;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('RINGKASAN LABA RUGI', 14, y);
+      doc.setFont('Helvetica', 'normal');
+      y += 8;
+      doc.text(`Total Penjualan (Omset): Rp ${totalSales.toLocaleString('id-ID')}`, 14, y);
+      y += 6;
+      doc.text(`Total Pengeluaran: Rp ${totalExpenses.toLocaleString('id-ID')}`, 14, y);
+      y += 6;
+      const netProfit = totalSales - totalExpenses;
+      doc.setFont('Helvetica', 'bold');
+      doc.text(`Laba / Rugi Bersih: Rp ${netProfit.toLocaleString('id-ID')}`, 14, y);
+      doc.setFont('Helvetica', 'normal');
+
+      y += 12;
+      doc.line(14, y, 196, y);
+      y += 8;
+      doc.setFont('Helvetica', 'bold');
+      doc.text('DAFTAR TRANSAKSI TERAKHIR', 14, y);
+      y += 8;
+
+      doc.setFontSize(9);
+      doc.text('Tanggal', 14, y);
+      doc.text('Tipe', 55, y);
+      doc.text('Keterangan', 85, y);
+      doc.text('Total (Rp)', 160, y);
+      y += 4;
+      doc.line(14, y, 196, y);
+      y += 6;
+
+      doc.setFont('Helvetica', 'normal');
+      const logs = transactions.slice(0, 20); // Limit to last 20
+      logs.forEach(t => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(new Date(t.date).toLocaleDateString('id-ID'), 14, y);
+        doc.text(t.type, 55, y);
+        doc.text(t.type === 'SALE' ? 'Penjualan' : t.notes || 'Pengeluaran', 85, y);
+        doc.text(t.total.toLocaleString('id-ID'), 160, y);
+        y += 6;
+      });
+
+      doc.save(`Laporan_KasQ_${currentUser.business.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    }
+  };
+
+  const exportHistoryReport = async (format = 'pdf') => {
     if (!currentUser) return;
     const filteredTxns = getFilteredHistory();
     const titleRange = historyFilterType === 'TODAY' 
@@ -1588,103 +2356,182 @@ export default function App() {
         ? '7 HARI TERAKHIR (MINGGUAN)' 
         : `RENTANG ${historyStartDate} S/D ${historyEndDate}`;
     
+    const filenameBase = `Laporan_Penjualan_KasQ_${titleRange.replace(/\s+/g, '_')}`;
+
     if (format === 'pdf') {
-      const doc = new jsPDF();
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text(`LAPORAN PENJUALAN - ${currentUser.business.toUpperCase()}`, 14, 20);
-      doc.setFontSize(10);
-      doc.setFont('Helvetica', 'normal');
-      doc.text(`Periode: ${titleRange} | Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 26);
-      doc.text(`Pemilik: ${currentUser.name} | Total Transaksi: ${filteredTxns.length}`, 14, 31);
-      doc.line(14, 34, 196, 34);
+      try {
+        const { default: jsPDF } = await import('jspdf');
+        const doc = new jsPDF();
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text(`LAPORAN PENJUALAN - ${currentUser.business.toUpperCase()}`, 14, 20);
+        doc.setFontSize(10);
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Periode: ${titleRange} | Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 26);
+        doc.text(`Pemilik: ${currentUser.name} | Total Transaksi: ${filteredTxns.length}`, 14, 31);
+        doc.line(14, 34, 196, 34);
 
-      let y = 42;
-      doc.setFont('Helvetica', 'bold');
-      doc.text('No. Invoice', 14, y);
-      doc.text('Tanggal & Waktu', 42, y);
-      doc.text('Pelanggan', 90, y);
-      doc.text('Metode', 125, y);
-      doc.text('Total (Rp)', 160, y);
-      y += 4;
-      doc.line(14, y, 196, y);
-      y += 6;
-
-      doc.setFont('Helvetica', 'normal');
-      let totalAmount = 0;
-      filteredTxns.forEach((t) => {
-        if (y > 275) {
-          doc.addPage();
-          y = 20;
-        }
-        const invNum = `INV-${new Date(t.date).getTime().toString().slice(-6)}`;
-        const dateStr = new Date(t.date).toLocaleString('id-ID');
-        const custName = t.customerName || '-';
-        const methodStr = t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer';
-        
-        doc.text(invNum, 14, y);
-        doc.text(dateStr, 42, y);
-        doc.text(custName.slice(0, 15), 90, y);
-        doc.text(methodStr, 125, y);
-        doc.text(t.total.toLocaleString('id-ID'), 160, y);
-        totalAmount += t.total;
+        let y = 42;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('No. Invoice', 14, y);
+        doc.text('Tanggal & Waktu', 42, y);
+        doc.text('Pelanggan', 90, y);
+        doc.text('Metode', 125, y);
+        doc.text('Total (Rp)', 160, y);
+        y += 4;
+        doc.line(14, y, 196, y);
         y += 6;
-      });
 
-      y += 4;
-      doc.line(14, y, 196, y);
-      y += 6;
-      doc.setFont('Helvetica', 'bold');
-      doc.text('TOTAL OMSET PENJUALAN', 14, y);
-      doc.text(`Rp ${totalAmount.toLocaleString('id-ID')}`, 160, y);
+        doc.setFont('Helvetica', 'normal');
+        let totalAmount = 0;
+        filteredTxns.forEach((t) => {
+          if (y > 275) {
+            doc.addPage();
+            y = 20;
+          }
+          const invNum = `INV-${new Date(t.date).getTime().toString().slice(-6)}`;
+          const dateStr = new Date(t.date).toLocaleString('id-ID');
+          const custName = t.customerName || '-';
+          const methodStr = t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer';
+          
+          doc.text(invNum, 14, y);
+          doc.text(dateStr, 42, y);
+          doc.text(custName.slice(0, 15), 90, y);
+          doc.text(methodStr, 125, y);
+          doc.text(t.total.toLocaleString('id-ID'), 160, y);
+          totalAmount += t.total;
+          y += 6;
+        });
 
-      doc.save(`Laporan_Penjualan_KasQ_${titleRange.replace(/\s+/g, '_')}.pdf`);
-    } else {
-      const data = filteredTxns.map((t, idx) => ({
-        'No': idx + 1,
-        'No. Invoice': `INV-${new Date(t.date).getTime().toString().slice(-6)}`,
-        'Tanggal': new Date(t.date).toLocaleString('id-ID'),
-        'Pelanggan': t.customerName || '-',
-        'Item Belanja': t.items.map(i => `${i.name} (x${i.qty})`).join(', '),
-        'Metode': t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer',
-        'Total (Rp)': t.total
-      }));
+        y += 4;
+        doc.line(14, y, 196, y);
+        y += 6;
+        doc.setFont('Helvetica', 'bold');
+        doc.text('TOTAL OMSET PENJUALAN', 14, y);
+        doc.text(`Rp ${totalAmount.toLocaleString('id-ID')}`, 160, y);
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Penjualan');
-      XLSX.writeFile(wb, `Laporan_Penjualan_KasQ_${titleRange.replace(/\s+/g, '_')}.xlsx`);
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const rawUri = doc.output('datauristring');
+          const base64Data = rawUri.split(',')[1];
+          await saveOrShareFile(`${filenameBase}.pdf`, base64Data);
+        } else {
+          doc.save(`${filenameBase}.pdf`);
+        }
+      } catch (err) {
+        console.error('Failed to export PDF history:', err);
+        setErrorMsg(err.message || 'Gagal ekspor PDF');
+      }
+    } else if (format === 'xlsx') {
+      try {
+        const data = filteredTxns.map((t, idx) => ({
+          'No': idx + 1,
+          'No. Invoice': `INV-${new Date(t.date).getTime().toString().slice(-6)}`,
+          'Tanggal': new Date(t.date).toLocaleString('id-ID'),
+          'Pelanggan': t.customerName || '-',
+          'Item Belanja': t.items.map(i => `${i.name} (x${i.qty})`).join(', '),
+          'Metode': t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer',
+          'Total (Rp)': t.total
+        }));
+
+        const { default: XLSX } = await import('xlsx-js-style');
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Penjualan');
+
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const base64Data = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+          await saveOrShareFile(`${filenameBase}.xlsx`, base64Data);
+        } else {
+          XLSX.writeFile(wb, `${filenameBase}.xlsx`);
+        }
+      } catch (err) {
+        console.error('Failed to export Excel history:', err);
+        setErrorMsg(err.message || 'Gagal ekspor Excel');
+      }
+    } else if (format === 'csv') {
+      try {
+        // Generate CSV content
+        const headers = ['No', 'No. Invoice', 'Tanggal', 'Pelanggan', 'Item Belanja', 'Metode', 'Total (Rp)'];
+        const rows = filteredTxns.map((t, idx) => {
+          const invNum = `INV-${new Date(t.date).getTime().toString().slice(-6)}`;
+          const dateStr = new Date(t.date).toLocaleString('id-ID');
+          const custName = t.customerName || '-';
+          const itemsStr = t.items.map(i => `${i.name} (x${i.qty})`).join('; ');
+          const methodStr = t.paymentMethod === 'CASH' ? 'Tunai' : t.paymentMethod === 'QRIS' ? 'QRIS' : 'Transfer';
+          return [
+            idx + 1,
+            `"${invNum}"`,
+            `"${dateStr}"`,
+            `"${custName.replace(/"/g, '""')}"`,
+            `"${itemsStr.replace(/"/g, '""')}"`,
+            `"${methodStr}"`,
+            t.total
+          ];
+        });
+
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.join(','))
+        ].join('\n');
+
+        const { Capacitor } = await import('@capacitor/core');
+        const csvBase64 = btoa(unescape(encodeURIComponent(csvContent)));
+
+        if (Capacitor.isNativePlatform()) {
+          await saveOrShareFile(`${filenameBase}.csv`, csvBase64);
+        } else {
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', `${filenameBase}.csv`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } catch (err) {
+        console.error('Failed to export CSV history:', err);
+        setErrorMsg(err.message || 'Gagal ekspor CSV');
+      }
     }
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!currentUser) return;
-    const reportData = transactions.map(t => ({
-      Tanggal: new Date(t.date).toLocaleString('id-ID'),
-      Tipe: t.type === 'SALE' ? 'Pemasukan (Sale)' : 'Pengeluaran (Expense)',
-      Nominal: t.total,
-      Keterangan: t.type === 'SALE' ? 'Penjualan POS' : t.notes
-    }));
+    try {
+      const reportData = transactions.map(t => ({
+        Tanggal: new Date(t.date).toLocaleString('id-ID'),
+        Tipe: t.type === 'SALE' ? 'Pemasukan (Sale)' : 'Pengeluaran (Expense)',
+        Nominal: t.total,
+        Keterangan: t.type === 'SALE' ? 'Penjualan POS' : t.notes
+      }));
 
-    const ws = XLSX.utils.json_to_sheet(reportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
+      const { default: XLSX } = await import('xlsx-js-style');
+      const ws = XLSX.utils.json_to_sheet(reportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Transaksi");
 
-    // Apply basic styles
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    for (let c = range.s.c; c <= range.e.c; ++c) {
-      const col = XLSX.utils.encode_col(c);
-      const cell = ws[`${col}1`];
-      if (cell) {
-        cell.s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: "4F46E5" } },
-          alignment: { horizontal: "center" }
-        };
+      // Apply basic styles
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let c = range.s.c; c <= range.e.c; ++c) {
+        const col = XLSX.utils.encode_col(c);
+        const cell = ws[`${col}1`];
+        if (cell) {
+          cell.s = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "4F46E5" } },
+            alignment: { horizontal: "center" }
+          };
+        }
       }
-    }
 
-    XLSX.writeFile(wb, `Laporan_KasQ_${currentUser.business.replace(/\s+/g, '_')}.xlsx`);
+      XLSX.writeFile(wb, `Laporan_KasQ_${currentUser.business.replace(/\s+/g, '_')}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export Excel:', err);
+    }
   };
 
   // --- STATS CALCULATIONS ---
@@ -1729,10 +2576,40 @@ export default function App() {
   };
 
   // --- AUTH SCREEN RENDERING ---
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 bg-neutral-950 flex flex-col items-center justify-center z-[9999] select-none antialiased">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-violet-600/10 rounded-full blur-[100px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-indigo-600/10 rounded-full blur-[120px]" />
+
+        <div className="text-center space-y-6">
+          <div className="relative flex items-center justify-center">
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20 relative overflow-hidden">
+              <span className="text-2xl font-black text-white tracking-wider">Q</span>
+              <div className="absolute inset-0 bg-white/10 opacity-0 hover:opacity-100 transition duration-300" />
+            </div>
+            <div className="absolute -inset-2.5 rounded-[36px] border-2 border-dashed border-violet-500/30 animate-spin [animation-duration:15s]" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-white tracking-wide">KASQ POS</h1>
+            <p className="text-xs text-neutral-400 font-medium">{splashText}</p>
+          </div>
+
+          <div className="w-36 h-[3px] bg-neutral-900 rounded-full overflow-hidden mx-auto border border-neutral-850 relative">
+            <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full w-1/2 animate-loading-bar" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return (
       <div className={`min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 antialiased select-none font-sans ${theme === 'light' ? 'theme-light' : ''}`}>
-        <div className="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
+        <div className={`max-w-md w-full bg-neutral-900 border border-neutral-850 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden transition-all duration-300 ${
+          shakeError ? 'animate-shake border-red-500/50 shadow-red-950/20' : ''
+        }`}>
           <div className="absolute top-0 left-0 w-full h-[4px] bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_0_12px_#6366f1]" />
           
           <div className="text-center space-y-2">
@@ -1765,14 +2642,14 @@ export default function App() {
                   <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Lengkap</label>
                   <input 
                     type="text" required placeholder="Contoh: Asep Sunandar" value={authName} onChange={e => setAuthName(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 focus:border-violet-600 transition"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Usaha / Toko</label>
                   <input 
                     type="text" required placeholder="Contoh: Kopi Asep" value={authBusiness} onChange={e => setAuthBusiness(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 focus:border-violet-600 transition"
                   />
                 </div>
               </>
@@ -1782,16 +2659,29 @@ export default function App() {
               <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">No. HP / Email</label>
               <input 
                 type="text" required placeholder="08xxxxxxxxxx" value={authPhone} onChange={e => setAuthPhone(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 focus:border-violet-600 transition"
               />
             </div>
 
             <div>
               <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Password</label>
-              <input 
-                type="password" required placeholder="Min. 6 karakter" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700"
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? 'text' : 'password'} 
+                  required 
+                  placeholder="Min. 6 karakter" 
+                  value={authPassword} 
+                  onChange={e => setAuthPassword(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 focus:border-violet-600 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition cursor-pointer"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
             </div>
 
             {/* Remember Me and Forgot Password */}
@@ -1801,7 +2691,7 @@ export default function App() {
                   type="checkbox" 
                   checked={rememberMe} 
                   onChange={e => setRememberMe(e.target.checked)}
-                  className="rounded bg-neutral-950 border-neutral-800 text-violet-600 focus:ring-violet-500 w-3.5 h-3.5"
+                  className="rounded bg-neutral-950 border-neutral-800 text-violet-600 focus:ring-violet-500 w-3.5 h-3.5 cursor-pointer"
                 />
                 <span>Ingat Saya</span>
               </label>
@@ -1821,12 +2711,29 @@ export default function App() {
               </div>
             )}
 
-            <button 
-              type="submit"
-              className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition cursor-pointer"
-            >
-              {authMode === 'login' ? 'Masuk ke Akun' : 'Buat Akun Gratis'}
-            </button>
+            <div className="space-y-2">
+              <button 
+                type="submit"
+                className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition cursor-pointer"
+              >
+                {authMode === 'login' ? 'Masuk ke Akun' : 'Buat Akun Gratis'}
+              </button>
+
+              {authMode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthPhone('088888888888');
+                    setAuthPassword('Bismillah');
+                    setRememberMe(true);
+                    setSuccessMsg('Akun demo berhasil diisi.');
+                  }}
+                  className="w-full bg-neutral-950 hover:bg-neutral-850 text-neutral-300 hover:text-white text-xs font-bold py-2.5 rounded-xl border border-neutral-800 transition cursor-pointer"
+                >
+                  💡 Masuk dengan Akun Demo
+                </button>
+              )}
+            </div>
           </form>
 
           <p className="text-[10px] text-neutral-600 text-center">
@@ -1849,6 +2756,8 @@ export default function App() {
         onOpenSettings={() => setActiveTab('settings')} 
         unsyncedCount={unsyncedCount}
         isSyncing={isSyncing}
+        syncProgress={syncProgress}
+        syncStatusText={syncStatusText}
         onPushSync={handlePushSyncData}
       />
 
@@ -1856,12 +2765,7 @@ export default function App() {
       <div className="w-full bg-neutral-900 border-b border-neutral-800 px-6 py-2.5 flex items-center justify-between gap-4 overflow-x-auto">
         <div className="flex items-center gap-1.5">
           {[
-            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'catalog', label: 'POS & Katalog', icon: ShoppingBag },
-            { id: 'hpp', label: 'Kalkulator HPP', icon: Calculator },
-            { id: 'materials', label: 'Bahan Baku', icon: Package },
-            { id: 'debts', label: 'Utang & Kasbon', icon: Users },
-            { id: 'reports', label: 'Laporan Keuangan', icon: FileText },
             { id: 'history', label: 'Riwayat Penjualan', icon: FileText },
             { id: 'settings', label: 'Pengaturan & Profil', icon: Settings }
           ].map(tab => {
@@ -1930,16 +2834,7 @@ export default function App() {
               <div className="bg-neutral-900/50 border border-neutral-800/80 rounded-2xl p-5 shadow-lg">
                 <h2 className="text-base sm:text-lg font-bold text-white mb-4">Grafik Transaksi Mingguan</h2>
                 <div className="w-full h-64 text-neutral-400">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={getGraphData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid stroke="#262626" strokeDasharray="3 3" />
-                      <XAxis dataKey="day" stroke="#525252" style={{ fontSize: '10px' }} />
-                      <YAxis stroke="#525252" style={{ fontSize: '10px' }} />
-                      <Tooltip contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '12px' }} />
-                      <Line type="monotone" dataKey="Penjualan" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
-                      <Line type="monotone" dataKey="Pengeluaran" stroke="#f43f5e" strokeWidth={3} />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <TransactionChart data={getGraphData()} />
                 </div>
               </div>
 
@@ -1967,7 +2862,7 @@ export default function App() {
                   {transactions.length === 0 ? (
                     <div className="text-center py-6 text-xs text-neutral-500">Belum ada transaksi.</div>
                   ) : (
-                    transactions.map((t) => (
+                    transactions.slice(0, 10).map((t) => (
                       <div key={t.id} className="bg-neutral-900 border border-neutral-850 rounded-xl p-3.5 flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${t.type === 'SALE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -1980,10 +2875,20 @@ export default function App() {
                             <span className="text-[10px] text-neutral-500">{new Date(t.date).toLocaleString('id-ID')}</span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span className={`text-xs sm:text-sm font-bold ${t.type === 'SALE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {t.type === 'SALE' ? '+' : '-'} Rp {t.total.toLocaleString('id-ID')}
-                          </span>
+                        <div className="flex items-center gap-3 text-right">
+                          <div className="text-right">
+                            <span className={`text-xs sm:text-sm font-bold block ${t.type === 'SALE' ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {t.type === 'SALE' ? '+' : '-'} Rp {t.total.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(t.id)}
+                            className="text-neutral-500 hover:text-red-500 p-1.5 hover:bg-neutral-800 rounded-lg transition"
+                            title="Hapus transaksi"
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </div>
                     ))
@@ -2014,29 +2919,61 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Live Search Bar */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3.5 top-3.5 text-neutral-500" />
+                <input
+                  type="text"
+                  placeholder="Cari menu di katalog..."
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-850 focus:border-violet-600 rounded-xl pl-10 pr-4 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-750 transition"
+                />
+              </div>
+
               {/* Product list grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto max-h-[460px] pr-1">
                 {products.length === 0 ? (
                   <div className="col-span-full text-center py-12 text-xs text-neutral-500">Katalog kosong. Silakan tambah produk.</div>
+                ) : products.filter(prod => !catalogSearch || prod.name.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 ? (
+                  <div className="col-span-full text-center py-12 text-xs text-neutral-500">Tidak ada produk yang cocok dengan pencarian.</div>
                 ) : (
-                  products.map((prod) => (
-                    <div 
-                      key={prod.id}
-                      className={`bg-neutral-900 border border-neutral-850 hover:border-violet-800/60 rounded-xl p-3.5 flex flex-col justify-between gap-3 transition shadow-sm group ${
-                        animatingItems[prod.id] ? 'animate-click-pop' : ''
-                      }`}
-                    >
-                      <div onClick={() => addToCart(prod)} className="cursor-pointer space-y-1">
-                        <h4 className="text-xs sm:text-sm font-bold text-neutral-200 group-hover:text-white line-clamp-1">{prod.name}</h4>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-neutral-500">
-                            {prod.lacakStok ? `Stok: ${prod.stock}` : 'Tanpa Stok'}
-                          </span>
-                          {prod.resep && prod.resep.length > 0 && (
-                            <span className="text-[8px] bg-indigo-500/10 text-indigo-400 font-bold px-1.5 py-0.5 rounded">Resep</span>
-                          )}
+                  products
+                    .filter(prod => !catalogSearch || prod.name.toLowerCase().includes(catalogSearch.toLowerCase()))
+                    .map((prod) => (
+                      <div 
+                        key={prod.id}
+                        className={`bg-neutral-900 border border-neutral-850 hover:border-violet-800/60 rounded-xl p-3.5 flex flex-col justify-between gap-3 transition shadow-sm group ${
+                          animatingItems[prod.id] ? 'animate-click-pop' : ''
+                        } ${(prod.lacakStok && prod.stock === 0) ? 'opacity-55' : ''}`}
+                      >
+                        <div 
+                          onClick={() => {
+                            if (prod.lacakStok && prod.stock === 0) return;
+                            addToCart(prod);
+                          }} 
+                          className={`space-y-1 ${(prod.lacakStok && prod.stock === 0) ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <h4 className="text-xs sm:text-sm font-bold text-neutral-200 group-hover:text-white line-clamp-1">{prod.name}</h4>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-neutral-500">
+                              {prod.lacakStok ? (
+                                prod.stock === 0 ? (
+                                  <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[8px] font-bold px-1.5 py-0.5 rounded">Habis</span>
+                                ) : prod.stock <= 5 ? (
+                                  <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[8px] font-bold px-1.5 py-0.5 rounded">Stok: {prod.stock}</span>
+                                ) : (
+                                  <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[8px] font-bold px-1.5 py-0.5 rounded">Stok: {prod.stock}</span>
+                                )
+                              ) : (
+                                <span className="bg-neutral-800 text-neutral-400 border border-neutral-750 text-[8px] font-bold px-1.5 py-0.5 rounded">Bebas</span>
+                              )}
+                            </span>
+                            {prod.resep && prod.resep.length > 0 && (
+                              <span className="text-[8px] bg-indigo-500/10 text-indigo-400 font-bold px-1.5 py-0.5 rounded">Resep</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
                       
                       <div className="flex items-center justify-between pt-2 border-t border-neutral-800/60">
                         <span className="text-xs font-bold text-violet-400">Rp {prod.price.toLocaleString('id-ID')}</span>
@@ -2282,6 +3219,28 @@ export default function App() {
                     className="hidden" 
                   />
                 </div>
+
+                <div className="border-t border-neutral-800/80 pt-4 space-y-3">
+                  <h4 className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📝</span> Impor Penjualan Lama (Backdate CSV)
+                  </h4>
+                  <p className="text-[10px] text-neutral-500 leading-relaxed">
+                    Impor data dari laporan format angkringan lama (CSV). Data penjualan akan ditambahkan (digabung) ke database sesuai tanggal transaksi tanpa menghapus data produk atau transaksi Anda saat ini.
+                  </p>
+                  <button 
+                    onClick={triggerImportCSV}
+                    className="w-full text-center text-xs bg-neutral-850 hover:bg-neutral-800 text-emerald-400 hover:text-emerald-300 font-bold py-2.5 rounded-xl border border-neutral-800 hover:border-neutral-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    📊 Pilih File CSV Angkringan
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={csvFileInputRef} 
+                    accept=".csv" 
+                    onChange={handleImportCSV} 
+                    className="hidden" 
+                  />
+                </div>
               </div>
 
               {/* Profit & Loss statement */}
@@ -2347,80 +3306,59 @@ export default function App() {
                 </div>
               )}
 
-              {/* Connection Diagnostics Card */}
-              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>🔌</span> Alat Diagnostik & Cek Koneksi
+              {/* Backup & Restore Data Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 p-6 rounded-2xl shadow-lg space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <span>💾</span> Cadangkan & Pulihkan Data POS
                 </h3>
                 <p className="text-[11px] text-neutral-500 leading-relaxed">
-                  Gunakan alat ini untuk menguji koneksi internet, izin rekaman suara, integrasi database Cloud (Firebase), sinkronisasi Google Sheets, dan status Gemini AI Anda.
+                  Amankan seluruh data transaksi dan katalog produk Anda secara offline. File cadangan dapat diunduh/dibagikan dan dipulihkan kembali sewaktu-waktu di perangkat ini atau perangkat lainnya.
                 </p>
-
-                <div className="space-y-3">
-                  <button
+                <div className="flex items-center gap-3">
+                  <button 
                     type="button"
-                    disabled={diagStatus === 'running'}
-                    onClick={runDiagnostics}
-                    className="bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-md transition cursor-pointer flex items-center gap-2"
+                    onClick={handleExportBackup}
+                    className="flex-1 text-center text-xs bg-violet-600 hover:bg-violet-500 text-white font-bold py-2.5 rounded-xl transition cursor-pointer"
                   >
-                    {diagStatus === 'running' ? (
-                      <>
-                        <RefreshCw size={12} className="animate-spin" />
-                        <span>Menguji...</span>
-                      </>
-                    ) : (
-                      <span>Mulai Tes Koneksi & Izin</span>
-                    )}
+                    📥 Cadangkan Data (Backup)
                   </button>
+                  <button 
+                    type="button"
+                    onClick={triggerImportBackup}
+                    className="flex-1 text-center text-xs bg-neutral-800 hover:bg-neutral-750 text-neutral-200 font-bold py-2.5 rounded-xl border border-neutral-700 transition cursor-pointer"
+                  >
+                    📤 Pulihkan Data (Import)
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={backupFileInputRef} 
+                    accept=".json" 
+                    onChange={handleImportBackup} 
+                    className="hidden" 
+                  />
+                </div>
 
-                  {diagStatus && (
-                    <div className="bg-neutral-950 border border-neutral-850 p-4 rounded-xl space-y-3.5 mt-4">
-                      {Object.entries(diagResults).map(([key, res]) => {
-                        const labelMap = {
-                          network: 'Koneksi Internet',
-                          microphone: 'Izin Mikrofon (Voice)',
-                          firebase: 'Database Cloud (Firebase)',
-                          googleSheets: 'Google Sheets Script',
-                          gemini: 'Gemini AI API'
-                        };
-                        const statusColor = {
-                          idle: 'text-neutral-550',
-                          running: 'text-amber-400 animate-pulse',
-                          success: 'text-emerald-400 font-bold',
-                          warning: 'text-amber-500 font-bold',
-                          error: 'text-red-400 font-bold'
-                        }[res.status];
-
-                        const statusEmoji = {
-                          idle: '⚪',
-                          running: '⏳',
-                          success: '🟢',
-                          warning: '🟡',
-                          error: '🔴'
-                        }[res.status];
-
-                        return (
-                          <div key={key} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 border-b border-neutral-900 pb-2.5 last:border-0 last:pb-0">
-                            <span className="text-neutral-300 font-semibold">{labelMap[key]}</span>
-                            <div className="flex items-center gap-2 text-left sm:text-right">
-                              <span className={statusColor}>
-                                {statusEmoji} {res.details}
-                              </span>
-                              {key === 'microphone' && res.status !== 'success' && (
-                                <button
-                                  type="button"
-                                  onClick={handleForceRequestMic}
-                                  className="bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white border border-violet-500/20 text-[9px] font-bold px-2 py-1 rounded transition cursor-pointer"
-                                >
-                                  Minta Izin Mic
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                <div className="border-t border-neutral-800/85 pt-4 space-y-3">
+                  <h4 className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📝</span> Impor Penjualan Lama (Backdate CSV)
+                  </h4>
+                  <p className="text-[10px] text-neutral-500 leading-relaxed">
+                    Impor data dari laporan format angkringan lama (CSV). Data penjualan akan ditambahkan (digabung) ke database sesuai tanggal transaksi tanpa menghapus data produk atau transaksi Anda saat ini.
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={triggerImportCSV}
+                    className="w-full text-center text-xs bg-neutral-850 hover:bg-neutral-800 text-emerald-400 hover:text-emerald-300 font-bold py-2.5 rounded-xl border border-neutral-800 hover:border-neutral-700 transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    📊 Pilih File CSV Angkringan
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={csvFileInputRef} 
+                    accept=".csv" 
+                    onChange={handleImportCSV} 
+                    className="hidden" 
+                  />
                 </div>
               </div>
 
@@ -2694,6 +3632,24 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Jarak Potong Bawah (Feed Lines)</label>
+                      <select
+                        value={printerSettings.bottomFeedLines ?? 1}
+                        onChange={(e) => handleUpdatePrinterSetting('bottomFeedLines', Number(e.target.value))}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                      >
+                        <option value={0}>0 Baris (Sangat Hemat)</option>
+                        <option value={1}>1 Baris (Hemat - Rekomendasi)</option>
+                        <option value={2}>2 Baris (Normal)</option>
+                        <option value={3}>3 Baris</option>
+                        <option value={4}>4 Baris</option>
+                        <option value={5}>5 Baris (Longgar)</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between bg-neutral-950 border border-neutral-850 p-4 rounded-xl">
                     <div>
                       <span className="text-xs font-bold text-neutral-200 block">Cetak Otomatis</span>
@@ -2824,18 +3780,32 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Karakter Pembatas (Divider Line)</label>
-                      <select
-                        value={printerSettings.dividerChar || '-'}
-                        onChange={(e) => handleUpdatePrinterSetting('dividerChar', e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
-                      >
-                        <option value="-">Garis Putus-Putus (----------)</option>
-                        <option value="=">Garis Ganda (==========)</option>
-                        <option value="*">Bintang (**********)</option>
-                        <option value=".">Titik-Titik (..........)</option>
-                      </select>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Karakter Pembatas (Divider Line)</label>
+                        <select
+                          value={printerSettings.dividerChar || '-'}
+                          onChange={(e) => handleUpdatePrinterSetting('dividerChar', e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                        >
+                          <option value="-">Garis Putus-Putus (----------)</option>
+                          <option value="=">Garis Ganda (==========)</option>
+                          <option value="*">Bintang (**********)</option>
+                          <option value=".">Titik-Titik (..........)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Rata Letak Header (Logo & Nama Toko)</label>
+                        <select
+                          value={printerSettings.headerAlign || 'center'}
+                          onChange={(e) => handleUpdatePrinterSetting('headerAlign', e.target.value)}
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none focus:border-violet-600 transition"
+                        >
+                          <option value="left">Rata Kiri</option>
+                          <option value="center">Rata Tengah (Center)</option>
+                          <option value="right">Rata Kanan</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="flex flex-col justify-center space-y-3 bg-neutral-950/45 p-4 rounded-xl border border-neutral-850">
@@ -2865,6 +3835,99 @@ export default function App() {
                           onChange={(e) => handleUpdatePrinterSetting('showLogo', e.target.checked)}
                           className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
                         />
+                      </div>
+                      <div className="flex items-center justify-between border-t border-neutral-850 pt-2.5">
+                        <span className="text-xs text-neutral-300">Potong Kertas Otomatis (Auto-Cut)</span>
+                        <input
+                          type="checkbox"
+                          checked={printerSettings.autoCut ?? (printerSettings.paperSize === '80mm')}
+                          onChange={(e) => handleUpdatePrinterSetting('autoCut', e.target.checked)}
+                          className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex flex-col border-t border-neutral-850 pt-2.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-neutral-300">Tampilkan Logo Gambar Usaha</span>
+                          <input
+                            type="checkbox"
+                            checked={printerSettings.showLogoImage === true}
+                            onChange={(e) => handleUpdatePrinterSetting('showLogoImage', e.target.checked)}
+                            className="w-4 h-4 text-violet-600 bg-neutral-950 border-neutral-800 rounded focus:ring-violet-600 cursor-pointer"
+                          />
+                        </div>
+                        {printerSettings.showLogoImage && (
+                          <div className="bg-neutral-950/85 p-3 rounded-xl border border-neutral-850 space-y-2.5">
+                            <div className="flex items-center gap-3">
+                              {printerSettings.logoImageBase64 ? (
+                                <div className="relative w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center justify-center overflow-hidden">
+                                  <img 
+                                    src={printerSettings.logoImageBase64} 
+                                    alt="Logo Usaha" 
+                                    className="w-full h-full object-contain"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdatePrinterSetting('logoImageBase64', '');
+                                    }}
+                                    className="absolute -top-1 -right-1 bg-red-650 hover:bg-red-650 text-white w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8px] font-bold shadow hover:bg-red-500 cursor-pointer"
+                                    title="Hapus Logo"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 border border-dashed border-neutral-800 rounded-lg flex items-center justify-center text-[10px] text-neutral-500 font-bold bg-neutral-900/30">
+                                  No Logo
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                <label className="inline-block bg-neutral-900 hover:bg-neutral-850 text-[10px] text-neutral-300 hover:text-white font-bold px-3 py-2 rounded-lg border border-neutral-800 cursor-pointer transition">
+                                  Upload Gambar Logo
+                                  <input
+                                    type="file"
+                                    accept="image/png, image/jpeg, image/jpg"
+                                    onChange={(e) => {
+                                      const file = e.target.files && e.target.files[0];
+                                      if (!file) return;
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        const img = new Image();
+                                        img.src = ev.target.result;
+                                        img.onload = () => {
+                                          const canvas = document.createElement('canvas');
+                                          const maxDim = 200;
+                                          let width = img.width;
+                                          let height = img.height;
+                                          if (width > height) {
+                                            if (width > maxDim) {
+                                              height = Math.round(height * (maxDim / width));
+                                              width = maxDim;
+                                            }
+                                          } else {
+                                            if (height > maxDim) {
+                                              width = Math.round(width * (maxDim / height));
+                                              height = maxDim;
+                                            }
+                                          }
+                                          canvas.width = width;
+                                          canvas.height = height;
+                                          const ctx = canvas.getContext('2d');
+                                          ctx.drawImage(img, 0, 0, width, height);
+                                          const compressedBase64 = canvas.toDataURL('image/png');
+                                          handleUpdatePrinterSetting('logoImageBase64', compressedBase64);
+                                        };
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+                                <span className="block text-[8px] text-neutral-500 mt-1">Format: PNG/JPG. Kompres otomatis.</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2904,73 +3967,17 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Cloud Sync Panel */}
-              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>☁️</span> Cloud Sinkronisasi Data
-                  </h3>
-                  <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-850 px-2.5 py-1 rounded-full">
-                    <div className={`w-1.5 h-1.5 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                    <span className="text-[8px] font-bold uppercase tracking-wider text-neutral-400">
-                      {navigator.onLine ? 'Online' : 'Offline'}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-[11px] text-neutral-500 leading-relaxed">
-                  Unggah data transaksi offline lokal Anda ke server cloud KasQ ketika Anda terhubung ke internet untuk mencegah kehilangan data.{" "}
-                  <button
-                    type="button"
-                    onClick={() => setShowSyncGuide(true)}
-                    className="text-violet-400 hover:text-violet-300 underline font-bold cursor-pointer inline-block ml-1"
-                  >
-                    Pelajari Alur Sinkronisasi ➔
-                  </button>
-                </p>
 
-                <div className="space-y-3.5">
-                  <div className="flex justify-between items-center text-xs bg-neutral-950 border border-neutral-850 p-4 rounded-xl">
-                    <div>
-                      <span className="text-neutral-300 font-semibold block">Data Belum Sinkron</span>
-                      <span className="text-[10px] text-neutral-500 block mt-0.5">Transaksi penjualan lokal</span>
-                    </div>
-                    <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${unsyncedCount > 0 ? 'text-amber-500 bg-amber-500/10 border border-amber-500/20' : 'text-emerald-500 bg-emerald-500/10 border border-emerald-500/20'}`}>
-                      {unsyncedCount} Transaksi
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!navigator.onLine || unsyncedCount === 0 || isSyncing}
-                    onClick={handlePushSyncData}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:from-neutral-850 disabled:to-neutral-850 text-white text-xs font-bold py-3 rounded-xl shadow-lg transition-all cursor-pointer active:scale-98 text-center flex items-center justify-center gap-2"
-                  >
-                    {isSyncing ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        <span>Sedang Sinkronisasi...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>☁️</span>
-                        <span>{navigator.onLine ? (unsyncedCount > 0 ? 'Sinkronisasi Sekarang' : 'Data Sudah Tersinkron') : 'Koneksi Offline'}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
 
               {/* Database Statistics Card */}
               <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <BarChart2 size={18} className="text-violet-400" /> Statistik Penyimpanan Database Lokal
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {[
                     { label: 'Katalog Produk', count: products.length, emoji: '🍔' },
-                    { label: 'Bahan Baku', count: materials.length, emoji: '🌾' },
-                    { label: 'Transaksi Selesai', count: transactions.length, emoji: '📈' },
-                    { label: 'Utang / Kasbon', count: debts.length, emoji: '👥' }
+                    { label: 'Transaksi Selesai', count: transactions.length, emoji: '📈' }
                   ].map((stat, idx) => (
                     <div key={idx} className="bg-neutral-950 border border-neutral-850 p-4 rounded-xl text-center space-y-1">
                       <span className="text-lg block">{stat.emoji}</span>
@@ -3051,6 +4058,13 @@ export default function App() {
                     >
                       <Download size={10} /> Excel
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => exportHistoryReport('csv')}
+                      className="bg-neutral-950 border border-neutral-850 hover:border-indigo-600 hover:text-indigo-400 text-neutral-400 text-[10px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Download size={10} /> CSV
+                    </button>
                     <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] font-bold px-2.5 py-1.5 rounded-lg">
                       {getFilteredHistory().length} Transaksi
                     </span>
@@ -3106,6 +4120,14 @@ export default function App() {
                               title="Ekspor struk ke gambar JPG"
                             >
                               🖼️ Simpan JPG
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTransaction(txn.id)}
+                              className="bg-red-600/10 hover:bg-red-600 text-[10px] text-red-400 hover:text-white font-bold px-3 py-2 rounded-lg border border-red-500/20 transition"
+                              title="Hapus transaksi ini"
+                            >
+                              🗑️ Hapus
                             </button>
                           </div>
                         </div>
@@ -3172,14 +4194,30 @@ export default function App() {
                   }`}>
                     <span>🛒</span> Keranjang POS
                   </h2>
-                  {pendingBills.length > 0 && (
-                    <button
-                      onClick={() => setShowPendingBillsModal(true)}
-                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
-                    >
-                      📂 {pendingBills.length} Ditunda
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {cart.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Apakah Anda yakin ingin mengosongkan seluruh keranjang belanja?')) {
+                            setCart([]);
+                            setCustomerName('');
+                          }
+                        }}
+                        className="bg-red-650/10 hover:bg-red-650 text-red-400 hover:text-white border border-red-500/20 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                        title="Kosongkan Keranjang"
+                      >
+                        🗑️ Reset
+                      </button>
+                    )}
+                    {pendingBills.length > 0 && (
+                      <button
+                        onClick={() => setShowPendingBillsModal(true)}
+                        className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                      >
+                        📂 {pendingBills.length} Ditunda
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {cart.length > 0 && (
@@ -3200,27 +4238,14 @@ export default function App() {
                     <div className="text-center py-12 text-xs text-neutral-500">Keranjang kosong. Pilih barang di katalog.</div>
                   ) : (
                     cart.map((item) => (
-                      <div key={item.id} className="bg-neutral-950 border border-neutral-850 rounded-xl p-3 flex items-center justify-between gap-3 animate-fade-in-down">
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-neutral-200 truncate">{item.name}</h4>
-                          <span className="text-[10px] text-neutral-400">Rp {item.price.toLocaleString('id-ID')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => updateCartQty(item.id, -1)}
-                            className="w-5.5 h-5.5 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded flex items-center justify-center transition cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-bold text-white min-w-4 text-center">{item.qty}</span>
-                          <button 
-                            onClick={() => updateCartQty(item.id, 1)}
-                            className="w-5.5 h-5.5 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded flex items-center justify-center transition cursor-pointer"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
+                      <CartItem 
+                        key={item.id} 
+                        item={item} 
+                        onUpdateQty={updateCartQty}
+                        onRemove={() => {
+                          setCart(prev => prev.filter(i => i.id !== item.id));
+                        }}
+                      />
                     ))
                   )}
                 </div>
@@ -3974,58 +4999,57 @@ export default function App() {
       )}
 
       {/* SUCCESS MODAL POPUP */}
-      {successMsg && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl scale-up animate-scale-up">
-            {/* Animated Icon Header based on content */}
-            <div className="flex justify-center">
-              {successMsg.toLowerCase().includes('sync') || successMsg.toLowerCase().includes('sinkronisasi') ? (
-                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 animate-pulse shadow-lg shadow-emerald-950/20">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
-                  </svg>
-                </div>
-              ) : successMsg.toLowerCase().includes('suara') || successMsg.toLowerCase().includes('ditemukan') || successMsg.toLowerCase().includes('analisis') || successMsg.toLowerCase().includes('ditambah') ? (
-                <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-400 animate-pulse shadow-lg shadow-violet-950/20">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-                  </svg>
-                </div>
-              ) : (
-                // Default Checkmark success for Checkout/Penjualan
-                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/20">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-8 h-8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                  </svg>
-                </div>
-              )}
-            </div>
+      {successMsg && (() => {
+        const popupInfo = getSuccessPopupInfo(successMsg);
+        return (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl scale-up animate-scale-up">
+              {/* Animated Icon Header based on type */}
+              <div className="flex justify-center">
+                {popupInfo.type === 'sync' ? (
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 animate-pulse shadow-lg shadow-emerald-950/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+                    </svg>
+                  </div>
+                ) : popupInfo.type === 'voice' ? (
+                  <div className="w-16 h-16 rounded-full bg-violet-500/10 border border-violet-500/25 flex items-center justify-center text-violet-400 animate-pulse shadow-lg shadow-violet-950/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                    </svg>
+                  </div>
+                ) : (
+                  // Default Checkmark success for Checkout/Penjualan/Products/General
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-8 h-8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </div>
+                )}
+              </div>
 
-            {/* Title & Message */}
-            <div className="space-y-1.5">
-              <h3 className="text-base font-black text-white tracking-tight">
-                {successMsg.toLowerCase().includes('sync') || successMsg.toLowerCase().includes('sinkronisasi')
-                  ? 'Sinkronisasi Sukses'
-                  : successMsg.toLowerCase().includes('suara') || successMsg.toLowerCase().includes('ditemukan') || successMsg.toLowerCase().includes('analisis') || successMsg.toLowerCase().includes('ditambah')
-                  ? 'Perintah Suara AI'
-                  : 'Transaksi Berhasil'}
-              </h3>
-              <p className="text-xs text-neutral-400 font-medium leading-relaxed px-1">
-                {successMsg}
-              </p>
-            </div>
+              {/* Title & Message */}
+              <div className="space-y-1.5">
+                <h3 className="text-base font-black text-white tracking-tight">
+                  {popupInfo.title}
+                </h3>
+                <p className="text-xs text-neutral-400 font-medium leading-relaxed px-1">
+                  {successMsg}
+                </p>
+              </div>
 
-            {/* Confirm Button */}
-            <button
-              type="button"
-              onClick={() => setSuccessMsg('')}
-              className="w-full py-2.5 bg-violet-600 hover:bg-violet-750 text-white text-xs font-extrabold rounded-xl transition cursor-pointer shadow-lg shadow-violet-900/25"
-            >
-              Mantap
-            </button>
+              {/* Confirm Button */}
+              <button
+                type="button"
+                onClick={() => setSuccessMsg('')}
+                className="w-full py-2.5 bg-violet-600 hover:bg-violet-750 text-white text-xs font-extrabold rounded-xl transition cursor-pointer shadow-lg shadow-violet-900/25"
+              >
+                Mantap
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ERROR MODAL POPUP */}
       {errorMsg && (
