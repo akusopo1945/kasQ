@@ -234,6 +234,7 @@ export default function App() {
   const [diagStatus, setDiagStatus] = useState(null); // null | 'running' | 'done'
   const [diagResults, setDiagResults] = useState({
     network: { status: 'idle', details: 'Belum diuji' },
+    caddyServer: { status: 'idle', details: 'Belum diuji' },
     firebase: { status: 'idle', details: 'Belum diuji' },
     gemini: { status: 'idle', details: 'Belum diuji' },
     googleSheets: { status: 'idle', details: 'Belum diuji' },
@@ -1283,6 +1284,33 @@ export default function App() {
           details: online ? 'Tersambung ke Internet' : 'Tidak ada koneksi internet (Offline-First Aktif)'
         }
       }));
+    } else if (testKey === 'caddyServer') {
+      if (isOnline) {
+        try {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), 6000);
+          await fetch('https://kasq.13.55.3.99.nip.io', {
+            method: 'HEAD',
+            mode: 'no-cors',
+            signal: controller.signal
+          });
+          clearTimeout(id);
+          setDiagResults(prev => ({
+            ...prev,
+            caddyServer: { status: 'success', details: 'Caddy Web Server Terhubung (https://kasq.13.55.3.99.nip.io SSL Aktif)' }
+          }));
+        } catch (e) {
+          setDiagResults(prev => ({
+            ...prev,
+            caddyServer: { status: 'error', details: 'Gagal menghubungi Caddy: ' + (e.name === 'AbortError' ? 'Koneksi timeout' : e.message) }
+          }));
+        }
+      } else {
+        setDiagResults(prev => ({
+          ...prev,
+          caddyServer: { status: 'warning', details: 'Dilewati: Koneksi offline' }
+        }));
+      }
     } else if (testKey === 'microphone') {
       try {
         if (navigator.permissions && navigator.permissions.query) {
@@ -1438,6 +1466,7 @@ export default function App() {
   const runDiagnostics = async () => {
     setDiagStatus('running');
     await runSingleDiagnostic('network');
+    await runSingleDiagnostic('caddyServer');
     await runSingleDiagnostic('microphone');
     await runSingleDiagnostic('firebase');
     await runSingleDiagnostic('googleSheets');
@@ -3996,6 +4025,73 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Connection Diagnostics Card */}
+              <div className="bg-neutral-900 border border-neutral-800/80 rounded-2xl p-6 shadow-lg space-y-4">
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>📡</span> Tes Koneksi & Diagnostik Sistem
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={runDiagnostics}
+                    disabled={diagStatus === 'running'}
+                    className="bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                  >
+                    {diagStatus === 'running' ? 'Memeriksa...' : 'Mulai Tes'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-neutral-500 leading-relaxed">
+                  Uji koneksi jaringan, web server Caddy (nip.io), Firebase Cloud Sync, Google Sheets API, dan izin mikrofon.
+                </p>
+                <div className="space-y-2 pt-2">
+                  {[
+                    { key: 'network', label: 'Koneksi Jaringan Internet', icon: '🌐' },
+                    { key: 'caddyServer', label: 'Caddy Hosting Server (nip.io)', icon: '🔒' },
+                    { key: 'firebase', label: 'Firebase Cloud Sync', icon: '🔥' },
+                    { key: 'gemini', label: 'Gemini AI Engine', icon: '🤖' },
+                    { key: 'microphone', label: 'Izin Audio / Mikrofon', icon: '🎙️' }
+                  ].map(test => {
+                    const result = diagResults[test.key];
+                    return (
+                      <div key={test.key} className="bg-neutral-950/80 border border-neutral-800 p-3 rounded-xl flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span>{test.icon}</span>
+                          <span className="font-semibold text-neutral-300">{test.label}</span>
+                        </div>
+                        <div className="text-right flex items-center gap-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                            result.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' :
+                            result.status === 'error' ? 'bg-red-500/10 text-red-400' :
+                            result.status === 'warning' ? 'bg-amber-500/10 text-amber-400' :
+                            result.status === 'running' ? 'bg-violet-500/10 text-violet-400 animate-pulse' :
+                            'bg-neutral-900 text-neutral-500'
+                          }`}>
+                            {result.status === 'idle' ? 'Belum Diuji' :
+                             result.status === 'running' ? 'Menguji...' :
+                             result.status === 'success' ? 'Berhasil' :
+                             result.status === 'warning' ? 'Peringatan' : 'Gagal'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Detailed status details */}
+                {Object.values(diagResults).some(r => r.status !== 'idle') && (
+                  <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 space-y-1.5 text-[10px] text-neutral-400 font-medium">
+                    <span className="font-bold text-neutral-300 block mb-1">Catatan Diagnostik:</span>
+                    {Object.entries(diagResults).map(([key, res]) => (
+                      res.status !== 'idle' && (
+                        <div key={key} className="flex gap-1.5 items-start">
+                          <span className="capitalize font-bold text-neutral-200">{key === 'caddyServer' ? 'Caddy' : key}:</span>
+                          <span>{res.details}</span>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
