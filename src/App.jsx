@@ -169,9 +169,17 @@ export default function App() {
   // Authentication & Session
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('kasq_session')) || 
-             JSON.parse(sessionStorage.getItem('kasq_session')) || 
-             null;
+      const saved = localStorage.getItem('kasq_session') || sessionStorage.getItem('kasq_session');
+      if (saved) return JSON.parse(saved);
+      
+      const defaultUser = {
+        id: 1,
+        phone: '088888888888',
+        name: 'Asep Sunandar',
+        business: 'Kopi Asep'
+      };
+      localStorage.setItem('kasq_session', JSON.stringify(defaultUser));
+      return defaultUser;
     } catch {
       return null;
     }
@@ -187,6 +195,8 @@ export default function App() {
 
   // Active Tab / Page Navigation
   const [activeTab, setActiveTab] = useState('catalog'); // catalog | history | settings
+  const [showMobileVoice, setShowMobileVoice] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
   const [showSyncGuide, setShowSyncGuide] = useState(false);
 
   // PWA Install Prompt State
@@ -4143,7 +4153,7 @@ export default function App() {
         </div>
 
         {/* RIGHT COLUMN: Voice Hub & Checkout Cart */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="hidden lg:flex lg:col-span-4 flex-col gap-6">
           
           {/* HYBRID AI SMART ASSISTANT */}
           <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-5 shadow-lg backdrop-blur-sm relative overflow-hidden flex flex-col items-center text-center">
@@ -4280,6 +4290,230 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* --- MOBILE COMPONETS FOR PORTABLE APK UX --- */}
+      {activeTab === 'catalog' && (
+        <>
+          {/* 1. Mobile Floating Cart Bar */}
+          {cart.length > 0 && !showMobileCart && (
+            <div className="fixed bottom-18 left-4 right-4 bg-neutral-900/95 border border-violet-500/35 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between shadow-2xl z-40 animate-slide-up lg:hidden">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Total Keranjang</span>
+                <span className="text-sm font-black text-white">
+                  {cart.reduce((sum, item) => sum + item.qty, 0)} Barang • Rp {cart.reduce((sum, item) => sum + item.price * item.qty, 0).toLocaleString('id-ID')}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(50);
+                  setShowMobileCart(true);
+                }}
+                className="bg-gradient-to-r from-violet-600 to-indigo-650 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-violet-900/30 flex items-center gap-2 cursor-pointer transition active:scale-95"
+              >
+                <span>🛒</span> Detail
+              </button>
+            </div>
+          )}
+
+          {/* 2. Mobile Floating AI Voice FAB */}
+          {!showMobileVoice && !showMobileCart && (
+            <button
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(80);
+                setShowMobileVoice(true);
+              }}
+              className="fixed bottom-20 right-6 w-14 h-14 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-650 flex items-center justify-center shadow-xl shadow-violet-950/40 border border-violet-500/20 z-40 active:scale-90 transition lg:hidden cursor-pointer"
+              title="KasQ AI Voice"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white animate-pulse">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+            </button>
+          )}
+
+          {/* 3. Mobile AI Voice Bottom Sheet */}
+          {showMobileVoice && (
+            <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-50 flex items-end justify-center lg:hidden">
+              <div className="bg-neutral-900 border-t border-neutral-800 w-full max-h-[85vh] rounded-t-3xl p-6 shadow-2xl space-y-4 animate-slide-up flex flex-col justify-between overflow-y-auto">
+                <div className="flex items-center justify-between pb-2 border-b border-neutral-800/60">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>🤖</span> KasQ Voice Assistant
+                  </h3>
+                  <button
+                    onClick={() => setShowMobileVoice(false)}
+                    className="text-neutral-500 hover:text-white bg-neutral-950 p-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+
+                <div className="flex-1 flex flex-col items-center justify-center py-6">
+                  <VoiceButton 
+                    onResult={(text) => {
+                      setInputText(text);
+                      processCommandText(text);
+                      setShowMobileVoice(false);
+                    }}
+                    onError={(err) => setErrorMsg(err)}
+                  />
+                  
+                  <div className="w-full mt-4 flex items-center bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 shadow-inner">
+                    <input
+                      type="text"
+                      placeholder="Atau ketik perintah di sini..."
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (processCommandText(inputText), setShowMobileVoice(false))}
+                      className="bg-transparent text-xs text-neutral-200 outline-none flex-1 placeholder-neutral-700"
+                    />
+                    <button 
+                      onClick={() => {
+                        processCommandText(inputText);
+                        setShowMobileVoice(false);
+                      }}
+                      disabled={isProcessing}
+                      className="text-[10px] bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-800 text-white font-bold px-3.5 py-2 rounded-lg transition cursor-pointer"
+                    >
+                      Kirim
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-neutral-950/60 p-4 rounded-2xl border border-neutral-800/80">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block mb-2">Contoh Perintah Suara:</span>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-neutral-300 font-medium">
+                    <div className="bg-neutral-900 px-3 py-2 rounded-xl">"Jual kopi 2"</div>
+                    <div className="bg-neutral-900 px-3 py-2 rounded-xl">"Cari teh manis"</div>
+                    <div className="bg-neutral-900 px-3 py-2 rounded-xl">"Hapus keranjang"</div>
+                    <div className="bg-neutral-900 px-3 py-2 rounded-xl">"Buka riwayat"</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Mobile Cart Bottom Sheet Drawer */}
+          {showMobileCart && (
+            <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-50 flex items-end justify-center lg:hidden">
+              <div className="bg-neutral-900 border-t border-neutral-800 w-full max-h-[90vh] rounded-t-3xl p-6 shadow-2xl space-y-4 animate-slide-up flex flex-col justify-between overflow-y-auto">
+                <div className="flex items-center justify-between pb-2 border-b border-neutral-800/60">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>🛒</span> Detail Keranjang
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Kosongkan keranjang?')) {
+                          setCart([]);
+                          setCustomerName('');
+                          setShowMobileCart(false);
+                        }
+                      }}
+                      className="text-red-400 bg-red-950/20 border border-red-500/20 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={() => setShowMobileCart(false)}
+                      className="text-neutral-500 hover:text-white bg-neutral-950 p-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto max-h-[40vh] space-y-2 pr-1">
+                  {cart.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-neutral-950 p-3 rounded-xl border border-neutral-800/60">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-white">{item.name}</span>
+                        <span className="text-[10px] text-neutral-500">Rp {item.price.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          onClick={() => handleUpdateCartQty(idx, item.qty - 1)}
+                          className="w-6 h-6 rounded-lg bg-neutral-900 text-neutral-400 hover:text-white font-bold flex items-center justify-center text-xs transition border border-neutral-800/60"
+                        >
+                          -
+                        </button>
+                        <span className="text-xs font-extrabold text-neutral-200 w-4 text-center">{item.qty}</span>
+                        <button
+                          onClick={() => handleUpdateCartQty(idx, item.qty + 1)}
+                          className="w-6 h-6 rounded-lg bg-neutral-900 text-neutral-400 hover:text-white font-bold flex items-center justify-center text-xs transition border border-neutral-800/60"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3.5 border-t border-neutral-800/60 pt-4">
+                  <div>
+                    <label className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block mb-1">Nama Pemesan / Pelanggan</label>
+                    <input
+                      type="text"
+                      placeholder="Meja 4 / Pak Joko..."
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full bg-neutral-950 border border-neutral-800/80 focus:border-violet-600 rounded-xl px-3.5 py-2.5 text-xs text-neutral-200 outline-none placeholder-neutral-700 transition"
+                    />
+                  </div>
+
+                  <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800/80 space-y-2 text-xs">
+                    <div className="flex justify-between font-bold text-neutral-200">
+                      <span>Total Bayar:</span>
+                      <span className="text-violet-400 font-black text-sm">
+                        Rp {cart.reduce((sum, item) => sum + item.price * item.qty, 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-neutral-800/60 space-y-2">
+                      <label className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider block">Metode Pembayaran</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'CASH', label: 'Cash' },
+                          { id: 'QRIS', label: 'QRIS' },
+                          { id: 'BANK_TRANSFER', label: 'Transfer' }
+                        ].map(method => (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => {
+                              if (navigator.vibrate) navigator.vibrate(20);
+                              setPaymentMethod(method.id);
+                            }}
+                            className={`py-2 text-[10px] font-bold rounded-xl transition cursor-pointer border ${
+                              paymentMethod === method.id
+                                ? 'bg-violet-600/20 text-violet-400 border-violet-500/40 shadow-sm shadow-violet-950/20'
+                                : 'bg-neutral-900 text-neutral-400 border-neutral-800/80 hover:bg-neutral-850'
+                            }`}
+                          >
+                            {method.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      onClick={() => {
+                        if (navigator.vibrate) navigator.vibrate(30);
+                        setShowMobileCart(false);
+                        openCheckoutModal();
+                      }}
+                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold py-3.5 rounded-xl shadow-lg transition active:scale-95 text-center cursor-pointer"
+                    >
+                      💳 Checkout / Selesai
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* POPUP: PREVIEW & VERIFY AI PARSED TRANSACTION */}
       {parsedPreview && (
