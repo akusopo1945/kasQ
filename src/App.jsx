@@ -1289,7 +1289,7 @@ export default function App() {
         try {
           const controller = new AbortController();
           const id = setTimeout(() => controller.abort(), 6000);
-          await fetch('https://kasq.13.55.3.99.nip.io', {
+          await fetch('https://kasq.13.211.188.77.nip.io', {
             method: 'HEAD',
             mode: 'no-cors',
             signal: controller.signal
@@ -1297,7 +1297,7 @@ export default function App() {
           clearTimeout(id);
           setDiagResults(prev => ({
             ...prev,
-            caddyServer: { status: 'success', details: 'Caddy Web Server Terhubung (https://kasq.13.55.3.99.nip.io SSL Aktif)' }
+            caddyServer: { status: 'success', details: 'Caddy Web Server Terhubung (https://kasq.13.211.188.77.nip.io SSL Aktif)' }
           }));
         } catch (e) {
           setDiagResults(prev => ({
@@ -4084,6 +4084,17 @@ export default function App() {
                              result.status === 'success' ? 'Berhasil' :
                              result.status === 'warning' ? 'Peringatan' : 'Gagal'}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => runSingleDiagnostic(test.key)}
+                            disabled={diagStatus === 'running' || result.status === 'running'}
+                            className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-white p-1 rounded-lg transition-all cursor-pointer disabled:opacity-40"
+                            title={`Uji ${test.label} saja`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 ${result.status === 'running' ? 'animate-spin' : ''}`}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     );
