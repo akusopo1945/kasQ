@@ -1318,12 +1318,12 @@ export default function App() {
           setDiagResults(prev => ({
             ...prev,
             microphone: {
-              status: status.state === 'granted' ? 'success' : status.state === 'prompt' ? 'warning' : 'error',
+              status: status.state === 'granted' ? 'success' : status.state === 'prompt' ? 'success' : 'error',
               details: status.state === 'granted' 
                 ? 'Izin Mikrofon: Diizinkan (Granted)' 
                 : status.state === 'prompt' 
-                  ? 'Izin Mikrofon: Siap Ditanyakan (Prompt)' 
-                  : 'Izin Mikrofon: Diblokir (Denied). Harap izinkan melalui ikon gembok di URL browser!'
+                  ? 'Izin Mikrofon: Siap Ditanyakan (Normal saat tombol mic ditekan)' 
+                  : 'Izin Mikrofon: Diblokir (Denied). Harap izinkan melalui pengaturan HP!'
             }
           }));
         } else {
@@ -1345,8 +1345,19 @@ export default function App() {
           const { doc, getDoc, setDoc } = await import('firebase/firestore');
           if (currentUser) {
             const testRef = doc(firestore, `users/${currentUser.id}/test_connection/ping`);
-            await setDoc(testRef, { timestamp: new Date().toISOString(), test: true }, { merge: true });
-            const snap = await getDoc(testRef);
+            
+            // Timeout promise 5 detik agar tidak stuck saat offline/firebase terblokir
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Koneksi timeout (Firestore tidak merespons dalam 5 detik)')), 5000)
+            );
+            
+            const writeAndReadPromise = (async () => {
+              await setDoc(testRef, { timestamp: new Date().toISOString(), test: true }, { merge: true });
+              return await getDoc(testRef);
+            })();
+
+            const snap = await Promise.race([writeAndReadPromise, timeoutPromise]);
+            
             if (snap.exists() && snap.data().test) {
               setDiagResults(prev => ({
                 ...prev,
@@ -1368,9 +1379,9 @@ export default function App() {
           console.error('Firebase Diagnostic Error:', e);
           let msg = e.message || 'Koneksi ditolak';
           if (msg.includes('permission-denied')) {
-            msg = 'Ditolak: Aturan Keamanan (Security Rules) Firestore memblokir penulisan, atau database belum dibuat di Firebase Console!';
-          } else if (msg.includes('not-found') || msg.includes('Database')) {
-            msg = 'Database Tidak Ditemukan: Buat database Cloud Firestore terlebih dahulu di Firebase Console!';
+            msg = 'Ditolak: Aturan Keamanan (Security Rules) Firestore memblokir penulisan!';
+          } else if (msg.includes('timeout')) {
+            msg = 'Timeout: Koneksi ke Firebase terblokir atau server Firebase tidak terjangkau!';
           }
           setDiagResults(prev => ({
             ...prev,
